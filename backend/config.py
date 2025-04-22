@@ -8,6 +8,9 @@ import platform
 import stat
 from fsplit.filesplit import Filesplit
 import paddle
+
+# 项目版本号
+VERSION = "1.1.1"
 # ×××××××××××××××××××× [不要改] start ××××××××××××××××××××
 paddle.disable_signal_handler()
 logging.disable(logging.DEBUG)  # 关闭DEBUG日志的打印
