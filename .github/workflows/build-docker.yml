@@ -36,6 +36,8 @@ jobs:
             version: "12.8"
           - type: directml
             version: "latest"
+          - type: cpu
+            version: "latest"
 
     steps:
     

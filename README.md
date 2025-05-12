@@ -5,6 +5,7 @@
 ![License](https://img.shields.io/badge/License-Apache%202-red.svg)
 ![python version](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![support os](https://img.shields.io/badge/OS-Windows/macOS/Linux-green.svg)  
+[![Docker](https://img.shields.io/badge/Docker-Image-blue?logo=docker)](https://hub.docker.com/r/eritpchy/video-subtitle-remover)
 
 Video-subtitle-remover (VSR) 是一款基于AI技术，将视频中的硬字幕去除的软件。
 主要实现了以下功能：
@@ -14,7 +15,7 @@ Video-subtitle-remover (VSR) 是一款基于AI技术，将视频中的硬字幕�
 - 支持全视频自动去除所有文本（不传入位置）
 - 支持多选图片批量去除水印文本
 
-<p style="text-align:center;"><img src="https://github.com/YaoFANGUK/video-subtitle-remover/raw/main/design/demo.png" alt="demo.png"/></p>
+<p style="text-align:center;"><img src="design/demo.png" alt="demo.png"/></p>
 
 **使用说明：**
 
@@ -32,32 +33,52 @@ Windows GPU版本v1.1.0（GPU）：
 **预构建包对比说明**：
 |       预构建包名          | Python  | Paddle | Torch | 环境                          | 支持的计算能力范围|
 |---------------|------------|--------------|--------------|-----------------------------|----------|
-| `vsr-windows-directml.7z`  | 3.12       | 3.0.0       | 2.4.1       | Windows 非Nvidia显卡             | 通用 |
-| `vsr-windows-nvidia-cuda-11.8.7z` | 3.12       | 3.0.0        | 2.7.0       | CUDA 11.8   | 3.5 – 8.9 |
-| `vsr-windows-nvidia-cuda-12.6.7z` | 3.12       | 3.0.0       | 2.7.0       | CUDA 12.6   | 5.0 – 8.9 |
-| `vsr-windows-nvidia-cuda-12.8.7z` | 3.12       | 3.0.0       | 2.7.0       | CUDA 12.8   | 5.0 – 9.0+ |
+| `vsr-windows-cpu.7z`              | 3.12 | 3.0.0 | 2.7.0 | 通用                 | 通用       |
+| `vsr-windows-directml.7z`         | 3.12 | 3.0.0 | 2.4.1 | Windows 非Nvidia显卡 | 通用       |
+| `vsr-windows-nvidia-cuda-11.8.7z` | 3.12 | 3.0.0 | 2.7.0 | CUDA 11.8           | 3.5 – 8.9  |
+| `vsr-windows-nvidia-cuda-12.6.7z` | 3.12 | 3.0.0 | 2.7.0 | CUDA 12.6           | 5.0 – 8.9  |
+| `vsr-windows-nvidia-cuda-12.8.7z` | 3.12 | 3.0.0 | 2.7.0 | CUDA 12.8           | 5.0 – 9.0+ |
 
 > NVIDIA官方提供了各GPU型号的计算能力列表，您可以参考链接: [CUDA GPUs](https://developer.nvidia.com/cuda-gpus) 查看你的GPU适合哪个CUDA版本
 
 **Docker版本：**
 ```shell
   # Nvidia 10 20 30系显卡
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.1.1-cuda11.8 
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.2.0-cuda11.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # Nvidia 40系显卡
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.1.1-cuda12.6 
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.2.0-cuda12.6 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # Nvidia 50系显卡
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.1.1-cuda12.8 
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.2.0-cuda12.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # AMD / Intel 独显 集显
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.1.1-directml 
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.2.0-directml python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
-  # 演示视频, 输入
-  /vsr/test/test.mp4
+  # CPU
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.2.0-cpu python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+
+  # 导出视频
   docker cp vsr:/vsr/test/test_no_sub.mp4 ./
 ```
 
+**命令行参数：**
+```
+Video Subtitle Remover Command Line Tool
+
+options:
+  -h, --help            show this help message and exit
+  --input INPUT, -i INPUT
+                        Input video file path
+  --output OUTPUT, -o OUTPUT
+                        Output video file path (optional)
+  --ymin YMIN           Subtitle area ymin (optional)
+  --ymax YMAX           Subtitle area ymax (optional)
+  --xmin XMIN           Subtitle area xmin (optional)
+  --xmax XMAX           Subtitle area xmax (optional)
+  --inpaint-mode {sttn-auto,sttn-det,lama,propainter,opencv}
+                        Inpaint mode, default is sttn-auto
+```
 ## 演示
 
 - GUI版：
@@ -116,7 +137,7 @@ cd <源码所在目录>
 
 #### 4. 安装合适的运行环境
 
-本项目支持 CUDA（NVIDIA显卡加速）和 DirectML（AMD、Intel等GPU/APU加速）两种运行模式。
+本项目支持 CUDA（NVIDIA显卡加速）、CPU（无 GPU）和 DirectML（AMD、Intel等GPU/APU加速）三种运行模式。
 
 ##### (1) CUDA（NVIDIA 显卡用户）
 
@@ -152,6 +173,16 @@ cd <源码所在目录>
   pip install -r requirements.txt
   ```
 
+- Linux系统还需要安装
+
+  ```shell
+  # for cuda 12.x
+  pip install onnxruntime-gpu==1.22.0
+  # for cuda 11.x
+  pip install onnxruntime-gpu==1.20.1 --index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-11/pypi/simple/
+  ```
+  > 详情见: [Install ONNX Runtime](https://onnxruntime.ai/docs/install/#install-onnx-runtime-gpu-cuda-12x)
+
 ##### (2) DirectML（AMD、Intel等GPU/APU加速卡用户）
 
 - 适用于 Windows 设备的 AMD/NVIDIA/Intel GPU。
@@ -161,7 +192,14 @@ cd <源码所在目录>
   pip install -r requirements.txt
   pip install torch_directml==0.2.5.dev240914
   ```
+##### (3) CPU 运行（无 GPU 加速）
 
+- 适用于没有 GPU 或不希望使用 GPU 的情况。
+  ```shell
+  pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+  pip install torch==2.7.0 torchvision==0.22.0
+  pip install -r requirements.txt
+  ```
 
 #### 4. 运行程序
 
