@@ -2,9 +2,7 @@ import multiprocessing
 import cv2
 import numpy as np
 
-from backend import config
-from backend.inpaint.lama_inpaint import LamaInpaint
-
+from backend.config import config
 
 def batch_generator(data, max_batch_size):
     """
@@ -30,88 +28,119 @@ def batch_generator(data, max_batch_size):
     if last_batch_start < n_samples:
         yield data[last_batch_start:]
 
-
-def inference_task(batch_data):
-    inpainted_frame_dict = dict()
-    for data in batch_data:
-        index, original_frame, coords_list = data
-        mask_size = original_frame.shape[:2]
-        mask = create_mask(mask_size, coords_list)
-        inpaint_frame = inpaint(original_frame, mask)
-        inpainted_frame_dict[index] = inpaint_frame
-    return inpainted_frame_dict
-
-
-def parallel_inference(inputs, batch_size=None, pool_size=None):
-    """
-    并行推理，同时保持结果顺序
-    """
-    if pool_size is None:
-        pool_size = multiprocessing.cpu_count()
-    # 使用上下文管理器自动管理进程池
-    with multiprocessing.Pool(processes=pool_size) as pool:
-        batched_inputs = list(batch_generator(inputs, batch_size))
-        # 使用map函数保证输入输出的顺序是一致的
-        batch_results = pool.map(inference_task, batched_inputs)
-    # 将批推理结果展平
-    index_inpainted_frames = [item for sublist in batch_results for item in sublist]
-    return index_inpainted_frames
-
-
-def inpaint(img, mask):
-    lama_inpaint_instance = LamaInpaint()
-    img_inpainted = lama_inpaint_instance(img, mask)
-    return img_inpainted
-
-
-def inpaint_with_multiple_masks(censored_img, mask_list):
-    inpainted_frame = censored_img
-    if mask_list:
-        for mask in mask_list:
-            inpainted_frame = inpaint(inpainted_frame, mask)
-    return inpainted_frame
-
-
 def create_mask(size, coords_list):
     mask = np.zeros(size, dtype="uint8")
     if coords_list:
         for coords in coords_list:
             xmin, xmax, ymin, ymax = coords
             # 为了避免框过小，放大10个像素
-            x1 = xmin - config.SUBTITLE_AREA_DEVIATION_PIXEL
+            x1 = xmin - config.subtitleAreaDeviationPixel.value
             if x1 < 0:
                 x1 = 0
-            y1 = ymin - config.SUBTITLE_AREA_DEVIATION_PIXEL
+            y1 = ymin - config.subtitleAreaDeviationPixel.value
             if y1 < 0:
                 y1 = 0
-            x2 = xmax + config.SUBTITLE_AREA_DEVIATION_PIXEL
-            y2 = ymax + config.SUBTITLE_AREA_DEVIATION_PIXEL
+            x2 = xmax + config.subtitleAreaDeviationPixel.value
+            y2 = ymax + config.subtitleAreaDeviationPixel.value
             cv2.rectangle(mask, (x1, y1),
                           (x2, y2), (255, 255, 255), thickness=-1)
     return mask
 
+def get_inpaint_area_by_mask(H, h, mask):
+        """
+        获取字幕去除区域，根据mask来确定需要填补的区域和高度
+        """
+        # 存储绘画区域的列表
+        inpaint_area = []
+        # 从视频底部的字幕位置开始，假设字幕通常位于底部
+        to_H = from_H = H
+        # 从底部向上遍历遮罩
+        while from_H != 0:
+            if to_H - h < 0:
+                # 如果下一段会超出顶端，则从顶端开始
+                from_H = 0
+                to_H = h
+            else:
+                # 确定段的上边界
+                from_H = to_H - h
+            # 检查当前段落是否包含遮罩像素
+            if not np.all(mask[from_H:to_H, :] == 0) and np.sum(mask[from_H:to_H, :]) > 10:
+                # 如果不是第一个段落，向下移动以确保没遗漏遮罩区域
+                if to_H != H:
+                    move = 0
+                    while to_H + move < H and not np.all(mask[to_H + move, :] == 0):
+                        move += 1
+                    # 确保没有越过底部
+                    if to_H + move < H and move < h:
+                        to_H += move
+                        from_H += move
+                # 将该段落添加到列表中
+                if (from_H, to_H) not in inpaint_area:
+                    inpaint_area.append((from_H, to_H))
+                else:
+                    break
+            # 移动到下一个段落
+            to_H -= h
+        return inpaint_area  # 返回绘画区域列表
 
-def inpaint_video(video_path, sub_list):
-    index = 0
-    frame_to_inpaint_list = []
-    video_cap = cv2.VideoCapture(video_path)
-    while True:
-        # 读取视频帧
-        ret, frame = video_cap.read()
-        if not ret:
-            break
-        index += 1
-        if index in sub_list.keys():
-            frame_to_inpaint_list.append((index, frame, sub_list[index]))
-        if len(frame_to_inpaint_list) > config.PROPAINTER_MAX_LOAD_NUM:
-            batch_results = parallel_inference(frame_to_inpaint_list)
-            for index, frame in batch_results:
-                file_name = f'/home/yao/Documents/Project/video-subtitle-remover/test/temp/{index}.png'
-                cv2.imwrite(file_name, frame)
-                print(f"success write: {file_name}")
-            frame_to_inpaint_list.clear()
-    print(f'finished')
-
+def expand_frame_ranges(frame_ranges, backward_frame_count, forward_frame_count):
+    """
+    扩展帧区间列表，向前和向后扩展指定的帧数，并确保区间连续性
+    
+    Args:
+        frame_ranges: 帧区间列表，格式为[(start1, end1), (start2, end2), ...]
+        backward_frame_count: 向前扩展的帧数
+        forward_frame_count: 向后扩展的帧数
+        
+    Returns:
+        扩展后的帧区间列表，保证连续性
+    """
+    if not frame_ranges:
+        return []
+    
+    # 按起始帧排序
+    sorted_ranges = sorted(frame_ranges)
+    expanded_ranges = []
+    
+    for i, (start, end) in enumerate(sorted_ranges):
+        # 向前扩展，但不能小于1
+        new_start = max(1, start - backward_frame_count)
+        
+        # 向后扩展
+        new_end = end + forward_frame_count
+        
+        # 检查是否与下一个区间重叠
+        if i < len(sorted_ranges) - 1:
+            next_start = sorted_ranges[i + 1][0]
+            
+            # 如果扩展后的结束帧超过了下一个区间的起始帧
+            if new_end >= next_start:
+                # 计算中点
+                mid_point = (end + next_start) // 2
+                
+                # 如果区间是连续的(相差1)，则对半平分
+                if next_start - end == 1:
+                    new_end = end  # 保持原结束帧
+                else:
+                    # 非连续区间，限制扩展到下一个区间起始帧减去backward_frame_count
+                    max_expand = next_start - 1  # 确保不会与下一个区间重叠
+                    new_end = min(new_end, max_expand)
+        
+        # 确保与前一个区间不重叠
+        if expanded_ranges:
+            prev_end = expanded_ranges[-1][1]
+            if new_start <= prev_end:
+                # 如果新区间的开始小于等于前一个区间的结束，调整开始位置
+                new_start = prev_end + 1
+        
+        # 确保区间有效（开始不大于结束）
+        if new_start <= new_end:
+            expanded_ranges.append((new_start, new_end))
+        else:
+            # 如果调整后区间无效，保留原始区间
+            expanded_ranges.append((start, end))
+    
+    return expanded_ranges
 
 if __name__ == '__main__':
     multiprocessing.set_start_method("spawn")
