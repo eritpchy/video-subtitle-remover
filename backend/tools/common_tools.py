@@ -37,9 +37,11 @@ def is_video_or_image(filename):
     # 检查扩展名是否在定义的视频或图片文件后缀集合中
     return file_extension in video_extensions or file_extension in image_extensions
 
-def merge_big_file_if_not_exists(dir, file):
+def merge_big_file_if_not_exists(dir, file, man_filename = None):
     if file not in os.listdir(dir):
         fs = Filesplit()
+        if man_filename is not None:
+            fs.man_filename = man_filename
         fs.merge(input_dir=dir)
 
 def get_readable_path(path):

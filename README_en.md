@@ -133,7 +133,7 @@ cd <source_code_directory>
 
 #### 4. Install the Appropriate Runtime Environment
 
-This project supports three runtime modes: CUDA (NVIDIA GPU acceleration), CPU (no GPU) and DirectML (AMD, Intel, and other GPUs/APUs).
+This project supports four running modes: CUDA (NVIDIA GPU acceleration), CPU (no GPU), DirectML (AMD, Intel and other GPU/APU acceleration), and macOS (Apple Silicon).
 
 ##### (1) CUDA (For NVIDIA GPU users)
 
@@ -198,6 +198,17 @@ This project supports three runtime modes: CUDA (NVIDIA GPU acceleration), CPU (
   pip install torch==2.7.0 torchvision==0.22.0
   pip install -r requirements.txt
   ```
+
+##### (4) Running on macOS (Apple Silicon)
+- Suitable for macOS (Apple Silicon) devices
+- For macOS (Intel), please use the CPU mode. Forcing GPU usage will only be slower.
+- On macOS (Apple Silicon), the accuracy of the subtitle detection precision mode model (ch_det_fast/model.onnx) does not seem to be ideal. It is recommended to use the fast mode instead.
+  ```shell
+  pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+  pip install torch==2.7.0 torchvision==0.22.0
+  pip install -r requirements.txt
+  ```
+  > Tested with Python 3.13
 
 #### 4. Run the program
 

@@ -19,45 +19,5 @@ class ModelConfig:
         merge_big_file_if_not_exists(self.LAMA_MODEL_DIR, 'bit-lama.pt')
         merge_big_file_if_not_exists(self.PROPAINTER_MODEL_DIR, 'ProPainter.pth')
         merge_big_file_if_not_exists(self.DET_MODEL_DIR, 'inference.pdiparams')
+        merge_big_file_if_not_exists(self.DET_MODEL_DIR, 'model.onnx', man_filename='model.onnx.csv')
     
-    def convertToOnnxModelIfNeeded(self, model_dir, model_filename="inference.pdmodel", params_filename="inference.pdiparams", opset_version=14):
-        """Converts a Paddle model to ONNX if ONNX providers are available and the model does not already exist."""
-        
-        onnx_model_path = os.path.join(model_dir, "model.onnx")
-
-        if os.path.exists(onnx_model_path):
-            print(f"ONNX model already exists: {onnx_model_path}. Skipping conversion.")
-            return onnx_model_path
-        
-        print(f"Converting Paddle model {model_dir} to ONNX...")
-        model_file = os.path.join(model_dir, model_filename)
-        params_file = os.path.join(model_dir, params_filename) if params_filename else ""
-
-        try:
-            import paddle2onnx
-            # Ensure the target directory exists
-            os.makedirs(os.path.dirname(onnx_model_path), exist_ok=True)
-
-            # Convert and save the model
-            onnx_model = paddle2onnx.export(
-                model_filename=model_file,
-                params_filename=params_file,
-                save_file=onnx_model_path,
-                opset_version=opset_version,
-                auto_upgrade_opset=True,
-                verbose=True,
-                enable_onnx_checker=True,
-                enable_experimental_op=True,
-                enable_optimize=True,
-                custom_op_info={},
-                deploy_backend="onnxruntime",
-                calibration_file="calibration.cache",
-                external_file=os.path.join(model_dir, "external_data"),
-                export_fp16_model=False,
-            )
-
-            print(f"Conversion successful. ONNX model saved to: {onnx_model_path}")
-            return onnx_model_path
-        except Exception as e:
-            print(f"Error during conversion: {e}")
-            return model_dir

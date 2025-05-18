@@ -135,7 +135,7 @@ cd <源码所在目录>
 
 #### 4. 安装合适的运行环境
 
-本项目支持 CUDA（NVIDIA显卡加速）、CPU（无 GPU）和 DirectML（AMD、Intel等GPU/APU加速）三种运行模式。
+本项目支持 CUDA (NVIDIA显卡加速)、CPU (无 GPU)、 DirectML (AMD、Intel等GPU/APU加速) 和 macOS (Apple Silicon) 四种运行模式。
 
 ##### (1) CUDA（NVIDIA 显卡用户）
 
@@ -198,7 +198,16 @@ cd <源码所在目录>
   pip install torch==2.7.0 torchvision==0.22.0
   pip install -r requirements.txt
   ```
-
+##### (4) macOS 运行 (Apple Silicon)
+- 适用于 macOS (Apple Silicon) 设备
+- macOS (Intel) 请使用CPU, 强行使用GPU只会更慢
+- macOS (Apple Silicon)上字幕检测精准模式的模型(ch_det_fast/model.onnx)精度似乎不太理想, 推荐使用快速模式
+  ```shell
+  pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+  pip install torch==2.7.0 torchvision==0.22.0
+  pip install -r requirements.txt
+  ```
+  > 基于Python3.13版本测试
 #### 4. 运行程序
 
 - 运行图形化界面

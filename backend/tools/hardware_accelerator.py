@@ -21,6 +21,7 @@ class HardwareAccelerator:
     def __init__(self):
         self.__cuda = False
         self.__dml = False
+        self.__mps = False
         self.__onnx_providers = []
         self.__enabled = True
         self.__device = None
@@ -28,6 +29,7 @@ class HardwareAccelerator:
     def initialize(self):
         self.check_directml_available()
         self.check_cuda_available()
+        self.check_mps_available()
         self.load_onnx_providers()
 
     def check_directml_available(self):
@@ -35,6 +37,9 @@ class HardwareAccelerator:
 
     def check_cuda_available(self):
         self.__cuda = torch.cuda.is_available()
+
+    def check_mps_available(self):
+        self.__mps = torch.backends.mps.is_available() and torch.backends.mps.is_built()
 
     def load_onnx_providers(self):
         try:
@@ -65,7 +70,7 @@ class HardwareAccelerator:
     def has_accelerator(self):
         if not self.__enabled:
             return False
-        return self.__cuda or self.__dml or len(self.__onnx_providers) > 0
+        return self.__cuda or self.__dml or self.__mps or len(self.__onnx_providers) > 0
 
     @property
     def accelerator_name(self):
@@ -75,6 +80,8 @@ class HardwareAccelerator:
             return "DirectML"
         if self.__cuda:
             return "GPU"
+        if self.__mps:
+            return "MPS"
         elif len(self.__onnx_providers) > 0:
             return ", ".join(self.__onnx_providers)
         else:
@@ -91,6 +98,11 @@ class HardwareAccelerator:
             return False
         return self.__cuda
     
+    def has_mps(self):
+        if not self.__enabled:
+            return False
+        return self.__mps
+
     def set_enabled(self, enable):
         self.__enabled = enable
 
@@ -117,4 +129,6 @@ class HardwareAccelerator:
                     self.__dml = False
             if self.__cuda:
                 return torch.device("cuda:0")
+            if self.__mps:
+                return torch.device("mps")
         return torch.device("cpu")

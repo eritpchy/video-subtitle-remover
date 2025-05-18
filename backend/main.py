@@ -395,7 +395,7 @@ class SubtitleRemover:
             accelerator_name = self.hardware_accelerator.accelerator_name
             if accelerator_name == 'DirectML' and config.inpaintMode.value in [InpaintMode.STTN_AUTO, InpaintMode.STTN_DET]:
                 model_device = 'DirectML'
-            if self.hardware_accelerator.has_cuda():
+            if self.hardware_accelerator.has_cuda() or self.hardware_accelerator.has_mps():
                 model_device = accelerator_name
         self.append_output(tr['Main']['UseModel'].format(f"{model_friendly_name} ({model_device})"))
 
@@ -446,7 +446,7 @@ class SubtitleRemover:
     @cached_property
     def lama_inpaint(self):
         model_path = os.path.join(self.model_config.LAMA_MODEL_DIR, 'big-lama.pt')
-        device = self.hardware_accelerator.device if self.hardware_accelerator.has_cuda() else torch.device("cpu")
+        device = self.hardware_accelerator.device if self.hardware_accelerator.has_cuda() or self.hardware_accelerator.has_mps() else torch.device("cpu")
         return LamaInpaint(device, model_path)
 
     @cached_property

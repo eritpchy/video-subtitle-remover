@@ -1,0 +1,4 @@
+filename,filesize,encoding,header
+model_1.onnx,52000000,,
+model_2.onnx,52000000,,
+model_3.onnx,9350183,,
