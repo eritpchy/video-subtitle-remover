@@ -38,10 +38,9 @@ class Config(QConfig):
     windowW = ConfigItem("Window", "Width", 1200)
     windowH = ConfigItem("Window", "Height", 1200)
 
-    subtitleSelectionAreaX = ConfigItem("Main", "SubtitleSelectionAreaX", 0.15)
-    subtitleSelectionAreaY = ConfigItem("Main", "SubtitleSelectionAreaY", 0.88)
-    subtitleSelectionAreaW = ConfigItem("Main", "SubtitleSelectionAreaW", 0.70)
-    subtitleSelectionAreaH = ConfigItem("Main", "SubtitleSelectionAreaH", 0.11)
+    # 使用一个配置项存储所有选区
+    # 默认值为一个选区，格式为："x,y,w,h;x,y,w,h;..."，分号分隔不同选区
+    subtitleSelectionAreas = ConfigItem("Main", "SubtitleSelectionAreas", "0.15,0.88,0.70,0.11")
 
     """
     MODE可选算法类型

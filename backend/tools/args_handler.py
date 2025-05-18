@@ -16,20 +16,8 @@ def parse_args():
         help="Output video file path (optional)"
     )
     parser.add_argument(
-        "--ymin", type=int, default=None,
-        help="Subtitle area ymin (optional)"
-    )
-    parser.add_argument(
-        "--ymax", type=int, default=None,
-        help="Subtitle area ymax (optional)"
-    )
-    parser.add_argument(
-        "--xmin", type=int, default=None,
-        help="Subtitle area xmin (optional)"
-    )
-    parser.add_argument(
-        "--xmax", type=int, default=None,
-        help="Subtitle area xmax (optional)"
+        "--subtitle-area-coords", "-c", action="append", nargs=4, type=int, metavar=("YMIN", "YMAX", "XMIN", "XMAX"),
+        help="Subtitle area coordinates (ymin ymax xmin xmax). Can be specified multiple times for multiple areas."
     )
     parser.add_argument(
         "--inpaint-mode", type=str, default="sttn-auto",
@@ -38,4 +26,6 @@ def parse_args():
     )
     args = parser.parse_args()
     args.inpaint_mode = InpaintMode[args.inpaint_mode.replace('-','_').upper()]
+    if args.subtitle_area_coords is None:
+        args.subtitle_area_coords = []
     return args

@@ -1,13 +1,15 @@
+import os
 import copy
 import time
+import sys
+from typing import List
 
 import cv2
-import numpy as np
 import torch
+import numpy as np
+from tqdm import tqdm
 from torchvision import transforms
-from typing import List
-import sys
-import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from backend.config import config
@@ -226,7 +228,7 @@ class STTNAutoInpaint:
             for i in range(rec_time):
                 start_f = i * self.clip_gap  # 起始帧位置
                 end_f = min((i + 1) * self.clip_gap, frame_info['len'])  # 结束帧位置
-                print('Processing:', start_f + 1, '-', end_f, ' / Total:', frame_info['len'])
+                tqdm.write(f'Processing: {start_f + 1} - {end_f} / Total: {frame_info['len']}')
                 
                 frames_hr = []  # 高分辨率帧列表
                 frames = {}  # 帧字典，用于存储裁剪后的图像

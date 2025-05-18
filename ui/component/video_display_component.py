@@ -10,7 +10,7 @@ class VideoDisplayComponent(QWidget):
     """视频显示组件，包含视频预览和选择框功能"""
     
     # 定义信号
-    selection_changed = Signal(QRect)  # 选择框变化信号
+    selection_changed = Signal(list)  # 选择框变化信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -18,11 +18,17 @@ class VideoDisplayComponent(QWidget):
         
         # 初始化变量
         self.is_drawing = False
-        self.selection_rect = QRect()
+        self.selection_rect = QRect()  # 当前正在绘制或调整的选区
+        self.selection_rects = []  # 存储多个选区
+        self.selection_ratios = []  # 存储多个选区的比例
+        self.active_selection_index = -1  # 当前活动选区的索引
         self.drag_start_pos = None
         self.resize_edge = None
         self.edge_size = 10  # 调整大小的边缘区域
         self.enable_mouse_events = True  # 控制是否启用鼠标事件
+        
+        # 安装事件过滤器以捕获键盘事件
+        self.installEventFilter(self)
         
         # 获取屏幕大小
         screen = QtWidgets.QApplication.primaryScreen().size()
@@ -43,9 +49,6 @@ class VideoDisplayComponent(QWidget):
         self.scaled_height = None
         self.border_left = 0
         self.border_top = 0
-        
-        # 保存选择框的相对位置和大小（相对于实际视频的比例）
-        self.selection_ratio = None
 
         self.__initWidget()
         
@@ -200,17 +203,19 @@ class VideoDisplayComponent(QWidget):
         self.video_display.setPixmap(rounded_pix)
         
         # 如果有保存的选择框比例，根据新视频尺寸重新计算选择框
-        if draw_selection and self.selection_ratio is not None and self.scaled_width and self.scaled_height:
-            x_ratio, y_ratio, w_ratio, h_ratio = self.selection_ratio
-            
-            # 计算新的选择框坐标和大小
-            x = int(x_ratio * self.scaled_width) + self.border_left
-            y = int(y_ratio * self.scaled_height) + self.border_top
-            w = int(w_ratio * self.scaled_width)
-            h = int(h_ratio * self.scaled_height)
-            
-            # 创建新的选择框
-            self.selection_rect = QRect(x, y, w, h)
+        if draw_selection and self.selection_ratios and self.scaled_width and self.scaled_height:
+            self.selection_rects = []
+            for ratio in self.selection_ratios:
+                x_ratio, y_ratio, w_ratio, h_ratio = ratio
+                
+                # 计算新的选择框坐标和大小
+                x = int(x_ratio * self.scaled_width) + self.border_left
+                y = int(y_ratio * self.scaled_height) + self.border_top
+                w = int(w_ratio * self.scaled_width)
+                h = int(h_ratio * self.scaled_height)
+                
+                # 创建新的选择框
+                self.selection_rects.append(QRect(x, y, w, h))
             
             # 更新视频显示
             self.update_preview_with_rect()
@@ -221,20 +226,35 @@ class VideoDisplayComponent(QWidget):
             return
             
         # 如果提供了新的矩形，使用它
-        if rect is not None:
-            self.selection_rect = rect
+        if rect is not None and self.active_selection_index >= 0:
+            self.selection_rects[self.active_selection_index] = rect
             
         # 创建一个副本用于绘制
         pixmap_copy = self.current_pixmap.copy()
         painter = QtGui.QPainter(pixmap_copy)
         
-        # 设置选择框样式
-        pen = QtGui.QPen(QtGui.QColor(0, 255, 0))  # 绿色
-        pen.setWidth(2)
-        painter.setPen(pen)
+        # 绘制所有选区
+        for i, rect in enumerate(self.selection_rects):
+            # 设置选择框样式
+            if i == self.active_selection_index:
+                # 活动选区使用绿色
+                pen = QtGui.QPen(QtGui.QColor(0, 255, 0))
+            else:
+                # 非活动选区使用黄色
+                pen = QtGui.QPen(QtGui.QColor(255, 255, 0))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            
+            # 绘制选择框
+            painter.drawRect(rect)
         
-        # 绘制选择框
-        painter.drawRect(self.selection_rect)
+        # 如果正在绘制新选区，也绘制它
+        if self.is_drawing and self.selection_rect.isValid():
+            pen = QtGui.QPen(QtGui.QColor(0, 255, 0))  # 绿色
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.drawRect(self.selection_rect)
+        
         painter.end()
         
         # 更新显示
@@ -244,70 +264,115 @@ class VideoDisplayComponent(QWidget):
         """鼠标按下事件处理"""
         if not self.enable_mouse_events:
             return
+        # 设置焦点到当前组件
+        self.setFocus()
         pos = event.pos()
-
-        # 检测双击或三击，重置选择框
+        
+        # 检查是否按下了Ctrl键
+        is_ctrl_pressed = event.modifiers() & Qt.ControlModifier
+        
+        # 检测双击，重置所有选区
         if event.type() == QtCore.QEvent.MouseButtonDblClick:
-            self.selection_rect = QRect(pos, pos)
-            self.resize_edge = None
-            self.is_drawing = True
-            self.drag_start_pos = pos
+            self.selection_rects = []
+            self.selection_ratios = []
+            self.active_selection_index = -1
+            self.update_preview_with_rect()
+            self.selection_changed.emit(self.selection_rects)
             return
         
-        # 检查是否在选择框边缘（用于调整大小）
-        if self.selection_rect.isValid():
-            # 右下角
-            if abs(pos.x() - self.selection_rect.right()) <= self.edge_size and abs(pos.y() - self.selection_rect.bottom()) <= self.edge_size:
-                self.resize_edge = "bottomright"
+        # 如果按下Ctrl键，开始绘制新选区
+        if is_ctrl_pressed:
+            self.is_drawing = True
+            self.selection_rect = QRect(pos, pos)
+            self.drag_start_pos = pos
+            self.resize_edge = None
+            self.active_selection_index = -1  # 不选中任何已有选区
+            return
+        
+        # 检查是否点击了已有选区
+        clicked_index = -1
+        for i, rect in enumerate(self.selection_rects):
+            # 检查是否在选区边缘（用于调整大小）
+            if self.is_on_rect_edge(pos, rect):
+                clicked_index = i
+                self.active_selection_index = i
+                self.resize_edge = self.get_resize_edge(pos, rect)
                 self.drag_start_pos = pos
+                self.update_preview_with_rect()
                 return
-            # 右上角
-            elif abs(pos.x() - self.selection_rect.right()) <= self.edge_size and abs(pos.y() - self.selection_rect.top()) <= self.edge_size:
-                self.resize_edge = "topright"
-                self.drag_start_pos = pos
-                return
-            # 左下角
-            elif abs(pos.x() - self.selection_rect.left()) <= self.edge_size and abs(pos.y() - self.selection_rect.bottom()) <= self.edge_size:
-                self.resize_edge = "bottomleft"
-                self.drag_start_pos = pos
-                return
-            # 左边缘
-            elif abs(pos.x() - self.selection_rect.left()) <= self.edge_size and self.selection_rect.top() <= pos.y() <= self.selection_rect.bottom():
-                self.resize_edge = "left"
-                self.drag_start_pos = pos
-                return
-            # 右边缘
-            elif abs(pos.x() - self.selection_rect.right()) <= self.edge_size and self.selection_rect.top() <= pos.y() <= self.selection_rect.bottom():
-                self.resize_edge = "right"
-                self.drag_start_pos = pos
-                return
-            # 上边缘
-            elif abs(pos.y() - self.selection_rect.top()) <= self.edge_size and self.selection_rect.left() <= pos.x() <= self.selection_rect.right():
-                self.resize_edge = "top"
-                self.drag_start_pos = pos
-                return
-            # 下边缘
-            elif abs(pos.y() - self.selection_rect.bottom()) <= self.edge_size and self.selection_rect.left() <= pos.x() <= self.selection_rect.right():
-                self.resize_edge = "bottom"
-                self.drag_start_pos = pos
-                return
-            # 左上角
-            elif abs(pos.x() - self.selection_rect.left()) <= self.edge_size and abs(pos.y() - self.selection_rect.top()) <= self.edge_size:
-                self.resize_edge = "topleft"
-                self.drag_start_pos = pos
-                return
-            # 在选择框内部（用于移动）
-            elif self.selection_rect.contains(pos):
+            # 检查是否在选区内部（用于移动）
+            elif rect.contains(pos):
+                clicked_index = i
+                self.active_selection_index = i
                 self.resize_edge = "move"
                 self.drag_start_pos = pos
+                self.update_preview_with_rect()
                 return
         
-        # 开始新的选择
-        self.is_drawing = True
-        self.selection_rect = QRect(pos, pos)
-        self.drag_start_pos = pos
-        self.resize_edge = None
-    
+        # 如果没有点击任何选区，开始绘制新选区
+        if clicked_index == -1:
+            self.is_drawing = True
+            self.selection_rect = QRect(pos, pos)
+            self.drag_start_pos = pos
+            self.resize_edge = None
+            self.active_selection_index = -1
+
+    def is_on_rect_edge(self, pos, rect):
+        """检查点是否在矩形边缘"""
+        # 右下角
+        if abs(pos.x() - rect.right()) <= self.edge_size and abs(pos.y() - rect.bottom()) <= self.edge_size:
+            return True
+        # 右上角
+        elif abs(pos.x() - rect.right()) <= self.edge_size and abs(pos.y() - rect.top()) <= self.edge_size:
+            return True
+        # 左下角
+        elif abs(pos.x() - rect.left()) <= self.edge_size and abs(pos.y() - rect.bottom()) <= self.edge_size:
+            return True
+        # 左上角
+        elif abs(pos.x() - rect.left()) <= self.edge_size and abs(pos.y() - rect.top()) <= self.edge_size:
+            return True
+        # 左边缘
+        elif abs(pos.x() - rect.left()) <= self.edge_size and rect.top() <= pos.y() <= rect.bottom():
+            return True
+        # 右边缘
+        elif abs(pos.x() - rect.right()) <= self.edge_size and rect.top() <= pos.y() <= rect.bottom():
+            return True
+        # 上边缘
+        elif abs(pos.y() - rect.top()) <= self.edge_size and rect.left() <= pos.x() <= rect.right():
+            return True
+        # 下边缘
+        elif abs(pos.y() - rect.bottom()) <= self.edge_size and rect.left() <= pos.x() <= rect.right():
+            return True
+        return False
+
+    def get_resize_edge(self, pos, rect):
+        """获取调整大小的边缘类型"""
+        # 右下角
+        if abs(pos.x() - rect.right()) <= self.edge_size and abs(pos.y() - rect.bottom()) <= self.edge_size:
+            return "bottomright"
+        # 右上角
+        elif abs(pos.x() - rect.right()) <= self.edge_size and abs(pos.y() - rect.top()) <= self.edge_size:
+            return "topright"
+        # 左下角
+        elif abs(pos.x() - rect.left()) <= self.edge_size and abs(pos.y() - rect.bottom()) <= self.edge_size:
+            return "bottomleft"
+        # 左上角
+        elif abs(pos.x() - rect.left()) <= self.edge_size and abs(pos.y() - rect.top()) <= self.edge_size:
+            return "topleft"
+        # 左边缘
+        elif abs(pos.x() - rect.left()) <= self.edge_size and rect.top() <= pos.y() <= rect.bottom():
+            return "left"
+        # 右边缘
+        elif abs(pos.x() - rect.right()) <= self.edge_size and rect.top() <= pos.y() <= rect.bottom():
+            return "right"
+        # 上边缘
+        elif abs(pos.y() - rect.top()) <= self.edge_size and rect.left() <= pos.x() <= rect.right():
+            return "top"
+        # 下边缘
+        elif abs(pos.y() - rect.bottom()) <= self.edge_size and rect.left() <= pos.x() <= rect.right():
+            return "bottom"
+        return None
+
     def selection_mouse_move(self, event):
         """鼠标移动事件处理"""
         if not self.enable_mouse_events:
@@ -316,20 +381,22 @@ class VideoDisplayComponent(QWidget):
         
         # 根据不同的操作模式处理鼠标移动
         if self.is_drawing:  # 绘制新选择框
-            self.selection_rect.setBottomRight(pos)
+            # 更新选择框的右下角
+            current_rect = QRect(self.drag_start_pos, pos).normalized()
+            self.selection_rect = current_rect
             self.update_preview_with_rect()
-        elif self.resize_edge:  # 调整选择框大小或位置
+        elif self.resize_edge and self.active_selection_index >= 0:  # 调整选择框大小或位置
             if self.resize_edge == "move":
                 # 移动整个选择框
                 dx = pos.x() - self.drag_start_pos.x()
                 dy = pos.y() - self.drag_start_pos.y()
                 
                 # 保存原始选择框尺寸
-                original_width = self.selection_rect.width()
-                original_height = self.selection_rect.height()
+                original_width = self.selection_rects[self.active_selection_index].width()
+                original_height = self.selection_rects[self.active_selection_index].height()
                 
                 # 计算新位置
-                new_rect = self.selection_rect.translated(dx, dy)
+                new_rect = self.selection_rects[self.active_selection_index].translated(dx, dy)
                 
                 # 获取视频显示区域
                 display_rect = self.video_display.rect()
@@ -356,29 +423,32 @@ class VideoDisplayComponent(QWidget):
                     if new_rect.bottom() == display_rect.height():
                         new_rect.setTop(new_rect.bottom() - original_height)
                     
-                self.selection_rect = new_rect
+                self.selection_rects[self.active_selection_index] = new_rect
                 self.drag_start_pos = pos
             else:
                 # 调整选择框大小
+                rect = self.selection_rects[self.active_selection_index]
                 if "left" in self.resize_edge:
-                    self.selection_rect.setLeft(pos.x())
+                    rect.setLeft(pos.x())
                 if "right" in self.resize_edge:
-                    self.selection_rect.setRight(pos.x())
+                    rect.setRight(pos.x())
                 if "top" in self.resize_edge:
-                    self.selection_rect.setTop(pos.y())
+                    rect.setTop(pos.y())
                 if "bottom" in self.resize_edge:
-                    self.selection_rect.setBottom(pos.y())
+                    rect.setBottom(pos.y())
                 
                 # 确保选择框在视频显示区域内
                 display_rect = self.video_display.rect()
-                if self.selection_rect.left() < 0:
-                    self.selection_rect.setLeft(0)
-                if self.selection_rect.top() < 0:
-                    self.selection_rect.setTop(0)
-                if self.selection_rect.right() > display_rect.width():
-                    self.selection_rect.setRight(display_rect.width())
-                if self.selection_rect.bottom() > display_rect.height():
-                    self.selection_rect.setBottom(display_rect.height())
+                if rect.left() < 0:
+                    rect.setLeft(0)
+                if rect.top() < 0:
+                    rect.setTop(0)
+                if rect.right() > display_rect.width():
+                    rect.setRight(display_rect.width())
+                if rect.bottom() > display_rect.height():
+                    rect.setBottom(display_rect.height())
+                
+                self.selection_rects[self.active_selection_index] = rect
                     
             self.update_preview_with_rect()
         else:
@@ -389,54 +459,105 @@ class VideoDisplayComponent(QWidget):
         """鼠标释放事件处理"""
         if not self.enable_mouse_events:
             return
+            
         # 结束绘制或调整
-        self.is_drawing = False
-        self.resize_edge = None
-        
-        # 标准化选择框（确保宽度和高度为正）
-        self.selection_rect = self.selection_rect.normalized()
-        
-        # 保存选择框的相对位置和大小
-        self.save_selection_ratio()
-        
-        # 发送选择框变化信号
-        self.selection_changed.emit(self.selection_rect)
+        if self.is_drawing:
+            # 标准化选择框（确保宽度和高度为正）
+            self.selection_rect = self.selection_rect.normalized()
+            
+            # 如果选择框有效（不是点击），添加到选区列表
+            if self.selection_rect.width() > 5 and self.selection_rect.height() > 5:
+                self.selection_rects.append(self.selection_rect)
+                self.active_selection_index = len(self.selection_rects) - 1
+                
+                # 保存选择框的相对位置和大小
+                self.save_selections_to_configs()
+                
+                # 发送选择框变化信号
+                self.selection_changed.emit(self.selection_rects)
+            
+            self.is_drawing = False
+            self.selection_rect = QRect()
+        elif self.resize_edge and self.active_selection_index >= 0:
+            # 标准化选择框
+            self.selection_rects[self.active_selection_index] = self.selection_rects[self.active_selection_index].normalized()
+            
+            # 保存选择框的相对位置和大小
+            self.save_selections_to_configs()
+            
+            # 发送选择框变化信号
+            self.selection_changed.emit(self.selection_rects)
+            
+            self.resize_edge = None
         
     def update_cursor_shape(self, pos):
         """根据鼠标位置更新光标形状"""
-        if not self.selection_rect.isValid():
-            self.video_display.setCursor(Qt.ArrowCursor)
-            return
+        # 首先检查是否有活动选区
+        if self.active_selection_index >= 0 and self.active_selection_index < len(self.selection_rects):
+            rect = self.selection_rects[self.active_selection_index]
             
-        # 检查鼠标是否在选择框边缘
-        if (abs(pos.x() - self.selection_rect.left()) <= self.edge_size and 
-            self.selection_rect.top() <= pos.y() <= self.selection_rect.bottom()):
-            self.video_display.setCursor(Qt.SizeHorCursor)
-        elif (abs(pos.x() - self.selection_rect.right()) <= self.edge_size and 
-              self.selection_rect.top() <= pos.y() <= self.selection_rect.bottom()):
-            self.video_display.setCursor(Qt.SizeHorCursor)
-        elif (abs(pos.y() - self.selection_rect.top()) <= self.edge_size and 
-              self.selection_rect.left() <= pos.x() <= self.selection_rect.right()):
-            self.video_display.setCursor(Qt.SizeVerCursor)
-        elif (abs(pos.y() - self.selection_rect.bottom()) <= self.edge_size and 
-              self.selection_rect.left() <= pos.x() <= self.selection_rect.right()):
-            self.video_display.setCursor(Qt.SizeVerCursor)
-        elif (abs(pos.x() - self.selection_rect.left()) <= self.edge_size and 
-              abs(pos.y() - self.selection_rect.top()) <= self.edge_size):
-            self.video_display.setCursor(Qt.SizeFDiagCursor)
-        elif (abs(pos.x() - self.selection_rect.right()) <= self.edge_size and 
-              abs(pos.y() - self.selection_rect.top()) <= self.edge_size):
-            self.video_display.setCursor(Qt.SizeBDiagCursor)
-        elif (abs(pos.x() - self.selection_rect.left()) <= self.edge_size and 
-              abs(pos.y() - self.selection_rect.bottom()) <= self.edge_size):
-            self.video_display.setCursor(Qt.SizeBDiagCursor)
-        elif (abs(pos.x() - self.selection_rect.right()) <= self.edge_size and 
-              abs(pos.y() - self.selection_rect.bottom()) <= self.edge_size):
-            self.video_display.setCursor(Qt.SizeFDiagCursor)
-        elif self.selection_rect.contains(pos):
-            self.video_display.setCursor(Qt.SizeAllCursor)
-        else:
-            self.video_display.setCursor(Qt.ArrowCursor)
+            # 检查鼠标是否在选择框边缘
+            if (abs(pos.x() - rect.left()) <= self.edge_size and 
+                rect.top() <= pos.y() <= rect.bottom()):
+                self.video_display.setCursor(Qt.SizeHorCursor)
+                return
+            elif (abs(pos.x() - rect.right()) <= self.edge_size and 
+                rect.top() <= pos.y() <= rect.bottom()):
+                self.video_display.setCursor(Qt.SizeHorCursor)
+                return
+            elif (abs(pos.y() - rect.top()) <= self.edge_size and 
+                rect.left() <= pos.x() <= rect.right()):
+                self.video_display.setCursor(Qt.SizeVerCursor)
+                return
+            elif (abs(pos.y() - rect.bottom()) <= self.edge_size and 
+                rect.left() <= pos.x() <= rect.right()):
+                self.video_display.setCursor(Qt.SizeVerCursor)
+                return
+            elif (abs(pos.x() - rect.left()) <= self.edge_size and 
+                abs(pos.y() - rect.top()) <= self.edge_size):
+                self.video_display.setCursor(Qt.SizeFDiagCursor)
+                return
+            elif (abs(pos.x() - rect.right()) <= self.edge_size and 
+                abs(pos.y() - rect.top()) <= self.edge_size):
+                self.video_display.setCursor(Qt.SizeBDiagCursor)
+                return
+            elif (abs(pos.x() - rect.left()) <= self.edge_size and 
+                abs(pos.y() - rect.bottom()) <= self.edge_size):
+                self.video_display.setCursor(Qt.SizeBDiagCursor)
+                return
+            elif (abs(pos.x() - rect.right()) <= self.edge_size and 
+                abs(pos.y() - rect.bottom()) <= self.edge_size):
+                self.video_display.setCursor(Qt.SizeFDiagCursor)
+                return
+            elif rect.contains(pos):
+                self.video_display.setCursor(Qt.SizeAllCursor)
+                return
+        
+        # 如果没有活动选区或鼠标不在活动选区上，检查所有其他选区
+        for rect in self.selection_rects:
+            # 检查鼠标是否在选择框边缘
+            if self.is_on_rect_edge(pos, rect):
+                # 根据边缘类型设置光标
+                edge_type = self.get_resize_edge(pos, rect)
+                if edge_type == "left" or edge_type == "right":
+                    self.video_display.setCursor(Qt.SizeHorCursor)
+                    return
+                elif edge_type == "top" or edge_type == "bottom":
+                    self.video_display.setCursor(Qt.SizeVerCursor)
+                    return
+                elif edge_type == "topleft" or edge_type == "bottomright":
+                    self.video_display.setCursor(Qt.SizeFDiagCursor)
+                    return
+                elif edge_type == "topright" or edge_type == "bottomleft":
+                    self.video_display.setCursor(Qt.SizeBDiagCursor)
+                    return
+            # 检查鼠标是否在选择框内部
+            elif rect.contains(pos):
+                self.video_display.setCursor(Qt.SizeAllCursor)
+                return
+        
+        # 如果鼠标不在任何选区上，设置为默认光标
+        self.video_display.setCursor(Qt.ArrowCursor)
     
     def set_video_parameters(self, frame_width, frame_height, scaled_width=None, scaled_height=None, border_left=0, border_top=0):
         """设置视频参数"""
@@ -454,113 +575,191 @@ class VideoDisplayComponent(QWidget):
     def set_selection_rect(self, rect):
         """设置选择框"""
         self.selection_rect = rect
-        self.save_selection_ratio()
+        self.save_selections_to_config()
         self.update_preview_with_rect()
     
-    def load_selection_ratio(self):
+    def load_selections_from_config(self):
         """从配置中加载选择框的相对位置和大小"""
         # 检查是否有有效的视频尺寸
         if not self.scaled_width or not self.scaled_height:
             return False
             
         # 从配置中读取选择框的相对位置和大小
-        x_ratio = config.subtitleSelectionAreaX.value
-        y_ratio = config.subtitleSelectionAreaY.value
-        w_ratio = config.subtitleSelectionAreaW.value
-        h_ratio = config.subtitleSelectionAreaH.value
+        areas_str = config.subtitleSelectionAreas.value
         
         # 检查配置值是否有效
-        if x_ratio is None or y_ratio is None or w_ratio is None or h_ratio is None:
+        if not areas_str:
             return False
 
-        # 检查配置值是否在有效范围内
-        if w_ratio <= 0.01 or h_ratio <= 0.005:
-            config.set(config.subtitleSelectionAreaX, config.subtitleSelectionAreaX.defaultValue)
-            config.set(config.subtitleSelectionAreaY, config.subtitleSelectionAreaY.defaultValue)
-            config.set(config.subtitleSelectionAreaW, config.subtitleSelectionAreaW.defaultValue)
-            config.set(config.subtitleSelectionAreaH, config.subtitleSelectionAreaH.defaultValue)
-            x_ratio = config.subtitleSelectionAreaX.value
-            y_ratio = config.subtitleSelectionAreaY.value
-            w_ratio = config.subtitleSelectionAreaW.value
-            h_ratio = config.subtitleSelectionAreaH.value
-
-        # 保存选择框比例
-        self.selection_ratio = (x_ratio, y_ratio, w_ratio, h_ratio)
+        # 清空现有选区
+        self.selection_rects = []
+        self.selection_ratios = []
         
-        # 计算实际像素坐标
-        x = int(x_ratio * self.scaled_width) + self.border_left
-        y = int(y_ratio * self.scaled_height) + self.border_top
-        w = int(w_ratio * self.scaled_width)
-        h = int(h_ratio * self.scaled_height)
+        # 解析所有选区
+        for area_str in areas_str.split(';'):
+            parts = area_str.split(',')
+            if len(parts) != 4:
+                continue
+                
+            try:
+                x_ratio = float(parts[0])
+                y_ratio = float(parts[1])
+                w_ratio = float(parts[2])
+                h_ratio = float(parts[3])
+                
+                # 检查配置值是否在有效范围内
+                if w_ratio <= 0.01 or h_ratio <= 0.005:
+                    continue
+                    
+                # 保存选择框比例
+                self.selection_ratios.append((x_ratio, y_ratio, w_ratio, h_ratio))
+                
+                # 计算实际像素坐标
+                x = int(x_ratio * self.scaled_width) + self.border_left
+                y = int(y_ratio * self.scaled_height) + self.border_top
+                w = int(w_ratio * self.scaled_width)
+                h = int(h_ratio * self.scaled_height)
+                
+                # 创建选择框
+                self.selection_rects.append(QRect(x, y, w, h))
+            except ValueError:
+                continue
         
-        # 创建选择框
-        self.selection_rect = QRect(x, y, w, h)
-        
+        # 如果有选区，设置最后一个为活动选区
+        if self.selection_rects:
+            self.active_selection_index = len(self.selection_rects) - 1
+        else:
+            self.active_selection_index = -1
+            
         # 更新预览
         self.update_preview_with_rect()
         
-        return True
+        return len(self.selection_rects) > 0
         
-    def save_selection_ratio(self):
-        """保存选择框的相对位置和大小（相对于实际视频的比例）"""
-        if not self.selection_rect.isValid() or not self.scaled_width or not self.scaled_height:
+    def save_selections_to_config(self):
+        """保存所有选择框的相对位置和大小"""
+        if not self.scaled_width or not self.scaled_height:
             return
             
-        # 调整选择框坐标，考虑黑边偏移
-        x_adjusted = max(0, self.selection_rect.x() - self.border_left)
-        y_adjusted = max(0, self.selection_rect.y() - self.border_top)
+        self.selection_ratios = []
+        areas_str_parts = []
         
-        # 如果选择框超出了实际视频区域，需要调整宽度和高度
-        w_adjusted = min(self.selection_rect.width(), self.scaled_width - x_adjusted)
-        h_adjusted = min(self.selection_rect.height(), self.scaled_height - y_adjusted)
+        for rect in self.selection_rects:
+            # 计算相对于实际视频的位置和大小比例
+            x_ratio = (rect.x() - self.border_left) / self.scaled_width if self.scaled_width > 0 else 0
+            y_ratio = (rect.y() - self.border_top) / self.scaled_height if self.scaled_height > 0 else 0
+            w_ratio = rect.width() / self.scaled_width if self.scaled_width > 0 else 0
+            h_ratio = rect.height() / self.scaled_height if self.scaled_height > 0 else 0
+            
+            # 添加到比例列表
+            self.selection_ratios.append((x_ratio, y_ratio, w_ratio, h_ratio))
+            
+            # 添加到字符串部分
+            areas_str_parts.append(f"{x_ratio},{y_ratio},{w_ratio},{h_ratio}")
         
-        # 转换为相对比例
-        x_ratio = x_adjusted / self.scaled_width
-        y_ratio = y_adjusted / self.scaled_height
-        w_ratio = w_adjusted / self.scaled_width
-        h_ratio = h_adjusted / self.scaled_height
-        
-        self.selection_ratio = (x_ratio, y_ratio, w_ratio, h_ratio)
-    
-        config.subtitleSelectionAreaY.value = y_ratio
-        config.subtitleSelectionAreaH.value = h_ratio
-        config.subtitleSelectionAreaX.value = x_ratio
-        config.subtitleSelectionAreaW.value = w_ratio
-        
+        # 更新配置
+        config.subtitleSelectionAreas.value = ";".join(areas_str_parts)
         qconfig.save()
     
     def get_original_coordinates(self):
         """获取选择框在原始视频中的坐标"""
-        if not self.selection_rect.isValid() or not self.scaled_width or not self.scaled_height:
-            return None
+        selection_rects = []
+        for rect in self.selection_rects:
+            if not rect.isValid() or not self.scaled_width or not self.scaled_height:
+                continue
+                
+            # 调整选择框坐标，考虑黑边偏移
+            x_adjusted = max(0, rect.x() - self.border_left)
+            y_adjusted = max(0, rect.y() - self.border_top)
             
-        # 调整选择框坐标，考虑黑边偏移
-        x_adjusted = max(0, self.selection_rect.x() - self.border_left)
-        y_adjusted = max(0, self.selection_rect.y() - self.border_top)
-        
-        # 如果选择框超出了实际视频区域，需要调整宽度和高度
-        w_adjusted = min(self.selection_rect.width(), self.scaled_width - x_adjusted)
-        h_adjusted = min(self.selection_rect.height(), self.scaled_height - y_adjusted)
-        
-        # 转换为原始视频坐标
-        scale_x = self.frame_width / self.scaled_width
-        scale_y = self.frame_height / self.scaled_height
-        
-        xmin = int(x_adjusted * scale_x)
-        xmax = int((x_adjusted + w_adjusted) * scale_x)
-        ymin = int(y_adjusted * scale_y)
-        ymax = int((y_adjusted + h_adjusted) * scale_y)
-        
-        # 确保坐标在有效范围内
-        xmin = max(0, min(xmin, self.frame_width))
-        xmax = max(0, min(xmax, self.frame_width))
-        ymin = max(0, min(ymin, self.frame_height))
-        ymax = max(0, min(ymax, self.frame_height))
-        
-        return (ymin, ymax, xmin, xmax)
+            # 如果选择框超出了实际视频区域，需要调整宽度和高度
+            w_adjusted = min(rect.width(), self.scaled_width - x_adjusted)
+            h_adjusted = min(rect.height(), self.scaled_height - y_adjusted)
+            
+            # 转换为原始视频坐标
+            scale_x = self.frame_width / self.scaled_width
+            scale_y = self.frame_height / self.scaled_height
+            
+            xmin = int(x_adjusted * scale_x)
+            xmax = int((x_adjusted + w_adjusted) * scale_x)
+            ymin = int(y_adjusted * scale_y)
+            ymax = int((y_adjusted + h_adjusted) * scale_y)
+            
+            # 确保坐标在有效范围内
+            xmin = max(0, min(xmin, self.frame_width))
+            xmax = max(0, min(xmax, self.frame_width))
+            ymin = max(0, min(ymin, self.frame_height))
+            ymax = max(0, min(ymax, self.frame_height))
+            
+            selection_rects.append((ymin, ymax, xmin, xmax))
+        return selection_rects
 
     def set_dragger_enabled(self, enabled):
         """设置拖动器是否可用"""
         self.enable_mouse_events = enabled
         self.video_display.setMouseTracking(enabled)
         self.video_display.setCursor(Qt.ArrowCursor)
+
+    def save_selections_to_configs(self):
+        """保存所有选择框的相对位置和大小"""
+        if not self.scaled_width or not self.scaled_height:
+            return
+            
+        self.selection_ratios = []
+        areas_str_parts = []
+        
+        for rect in self.selection_rects:
+            # 计算相对于实际视频的位置和大小比例
+            x_ratio = round((rect.x() - self.border_left) / self.scaled_width if self.scaled_width > 0 else 0, 4)
+            y_ratio = round((rect.y() - self.border_top) / self.scaled_height if self.scaled_height > 0 else 0, 4)
+            w_ratio = round(rect.width() / self.scaled_width if self.scaled_width > 0 else 0, 4)
+            h_ratio = round(rect.height() / self.scaled_height if self.scaled_height > 0 else 0, 4)
+            
+            # 添加到比例列表
+            self.selection_ratios.append((x_ratio, y_ratio, w_ratio, h_ratio))
+            
+            # 添加到字符串部分
+            areas_str_parts.append(f"{x_ratio},{y_ratio},{w_ratio},{h_ratio}")
+        
+        # 更新配置
+        config.subtitleSelectionAreas.value = ";".join(areas_str_parts)
+        if len(config.subtitleSelectionAreas.value) <= 0:
+            config.subtitleSelectionAreas.value = config.subtitleSelectionAreas.defaultValue
+        qconfig.save()
+    
+    def get_selection_rects(self):
+        """获取所有选区"""
+        return self.selection_rects
+    
+    def clear_selections(self):
+        """清除所有选区"""
+        self.selection_rects = []
+        self.selection_ratios = []
+        self.active_selection_index = -1
+        self.update_preview_with_rect()
+        self.selection_changed.emit(self.selection_rects)
+
+    def eventFilter(self, obj, event):
+        """事件过滤器，用于处理键盘事件"""
+        if event.type() == QEvent.KeyPress:
+            # 处理退格键或删除键
+            if (event.key() == Qt.Key_Backspace or event.key() == Qt.Key_Delete) and self.active_selection_index >= 0:
+               
+                # 删除当前活跃选区
+                self.selection_rects.pop(self.active_selection_index)
+                if self.selection_ratios:
+                    self.selection_ratios.pop(self.active_selection_index)
+                
+                # 如果还有选区，将最后一个选区设为活跃选区
+                if self.selection_rects:
+                    self.active_selection_index = len(self.selection_rects) - 1
+                else:
+                    self.active_selection_index = -1
+                self.save_selections_to_configs()
+                # 更新显示并发送选区变化信号
+                self.update_preview_with_rect()
+                self.selection_changed.emit(self.selection_rects)
+                return True
+        
+        # 对于其他事件，继续传递给父类处理
+        return super().eventFilter(obj, event)

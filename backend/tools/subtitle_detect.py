@@ -17,9 +17,9 @@ class SubtitleDetect:
     文本框检测类，用于检测视频帧中是否存在文本框
     """
 
-    def __init__(self, video_path, sub_area=None):
+    def __init__(self, video_path, sub_areas=[]):
         self.video_path = video_path
-        self.sub_area = sub_area
+        self.sub_areas = sub_areas
 
     @cached_property
     def text_detector(self):
@@ -46,12 +46,13 @@ class SubtitleDetect:
         if coordinate_list:
             for coordinate in coordinate_list:
                 xmin, xmax, ymin, ymax = coordinate
-                if self.sub_area is not None:
-                    s_ymin, s_ymax, s_xmin, s_xmax = self.sub_area
-                    if (s_xmin <= xmin and xmax <= s_xmax
-                            and s_ymin <= ymin
-                            and ymax <= s_ymax):
-                        temp_list.append((xmin, xmax, ymin, ymax))
+                if self.sub_areas is not None and len(self.sub_areas) > 0:
+                    for sub_area in self.sub_areas:
+                        s_ymin, s_ymax, s_xmin, s_xmax = sub_area
+                        if (s_xmin <= xmin and xmax <= s_xmax
+                                and s_ymin <= ymin
+                                and ymax <= s_ymax):
+                            temp_list.append((xmin, xmax, ymin, ymax))
                 else:
                     temp_list.append((xmin, xmax, ymin, ymax))
         return temp_list

@@ -72,10 +72,8 @@ options:
                         Input video file path
   --output OUTPUT, -o OUTPUT
                         Output video file path (optional)
-  --ymin YMIN           Subtitle area ymin (optional)
-  --ymax YMAX           Subtitle area ymax (optional)
-  --xmin XMIN           Subtitle area xmin (optional)
-  --xmax XMAX           Subtitle area xmax (optional)
+  --subtitle-area-coords YMIN YMAX XMIN XMAX, -c YMIN YMAX XMIN XMAX
+                        Subtitle area coordinates (ymin ymax xmin xmax). Can be specified multiple times for multiple areas.
   --inpaint-mode {sttn-auto,sttn-det,lama,propainter,opencv}
                         Inpaint mode, default is sttn-auto
 ```

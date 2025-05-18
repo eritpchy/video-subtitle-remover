@@ -312,14 +312,14 @@ class HomeInterface(QWidget):
                             
                             
                             # 获取字幕区域坐标（直接从视频显示组件获取）
-                            subtitle_area = self.video_display_component.get_original_coordinates()
-                            if not subtitle_area:
+                            subtitle_areas = self.video_display_component.get_original_coordinates()
+                            if not subtitle_areas:
                                 self.append_output(tr['SubtitleExtractorGUI']['SelectSubtitleArea'])
                                 return
-                            self.append_output(f"{tr['SubtitleExtractorGUI']['SubtitleArea']}: {subtitle_area}")
+                            self.append_output(f"{tr['SubtitleExtractorGUI']['SubtitleArea']}: {subtitle_areas}")
                             
                             self.task_list_component.update_task_status(self.current_processing_task_index, TaskStatus.PROCESSING)
-                            process = self.run_subtitle_remover_process(task.path, task.output_path, subtitle_area)
+                            process = self.run_subtitle_remover_process(task.path, task.output_path, subtitle_areas)
                             
                             # 更新任务状态为已完成
                             task = self.task_list_component.get_task(self.current_processing_task_index)
@@ -385,14 +385,14 @@ class HomeInterface(QWidget):
             
 
     # 修改run_subtitle_remover_process方法
-    def run_subtitle_remover_process(self, video_path, output_path, subtitle_area):
+    def run_subtitle_remover_process(self, video_path, output_path, subtitle_areas):
         """
         使用多进程执行字幕提取，并等待进程完成
         
         Args:
             video_path: 视频文件路径
             output_path: 输出文件路径
-            subtitle_area: 字幕区域坐标 (ymin, ymax, xmin, xmax)
+            subtitle_areas: 字幕区域坐标 [(ymin, ymax, xmin, xmax)]
         """
         subtitle_remover_remote_caller = SubtitleRemoverRemoteCall()
         subtitle_remover_remote_caller.register_update_progress_callback(self.progress_signal.emit)
@@ -401,7 +401,7 @@ class HomeInterface(QWidget):
         subtitle_remover_remote_caller.register_error_callback(self.task_error_signal.emit)
         process = multiprocessing.Process(
             target=HomeInterface.remover_process,
-            args=(subtitle_remover_remote_caller.queue, video_path, output_path, subtitle_area)
+            args=(subtitle_remover_remote_caller.queue, video_path, output_path, subtitle_areas)
         )
         try:
             if not self.running_task:
@@ -476,12 +476,13 @@ class HomeInterface(QWidget):
         """更新执行时预览"""
         frame_ori, frame_comp = args
             
-        subtitle_area = self.video_display_component.get_original_coordinates()
-        if subtitle_area:
-            ymin, ymax, xmin, xmax = subtitle_area
+        subtitle_areas = self.video_display_component.get_original_coordinates()
+        if subtitle_areas:
             if frame_ori is frame_comp:
                 frame_ori = frame_ori.copy()
-            cv2.rectangle(frame_ori, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            for rect in subtitle_areas:
+                ymin, ymax, xmin, xmax = rect
+                cv2.rectangle(frame_ori, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
         preview_frame = cv2.hconcat([frame_ori, frame_comp])
         # 先缩放图像
         resized_frame = self._img_resize(preview_frame)
@@ -512,7 +513,7 @@ class HomeInterface(QWidget):
         self.fps = self.video_cap.get(cv2.CAP_PROP_FPS)
         
         self.update_preview(frame)
-        self.video_display_component.load_selection_ratio()
+        self.video_display_component.load_selections_from_config()
         self.video_slider.setMaximum(self.frame_count)
         self.video_slider.setValue(1)
         self.video_display_component.set_dragger_enabled(True)
@@ -531,7 +532,7 @@ class HomeInterface(QWidget):
         self.frame_width = frame.shape[1]
         self.fps = 1
         self.update_preview(frame)
-        self.video_display_component.load_selection_ratio()
+        self.video_display_component.load_selections_from_config()
         self.video_slider.setMaximum(self.frame_count)
         self.video_slider.setValue(1)
         self.video_display_component.set_dragger_enabled(True)

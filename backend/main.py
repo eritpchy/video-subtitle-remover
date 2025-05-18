@@ -33,11 +33,11 @@ from tqdm import tqdm
 import numpy as np
 
 class SubtitleRemover:
-    def __init__(self, vd_path, sub_area=None, gui_mode=False):
+    def __init__(self, vd_path, sub_areas=[], gui_mode=False):
         # 线程锁
         self.lock = threading.RLock()
         # 用户指定的字幕区域位置
-        self.sub_area = sub_area
+        self.sub_areas = sub_areas
         # 是否为gui运行，gui运行需要显示预览
         self.gui_mode = gui_mode
         self.hardware_accelerator = HardwareAccelerator.instance()
@@ -67,6 +67,9 @@ class SubtitleRemover:
         self.video_out_path = os.path.abspath(os.path.join(os.path.dirname(self.video_path), f'{self.vd_name}_no_sub.mp4'))
         self.propainter_inpaint = None
         self.ext = os.path.splitext(vd_path)[-1]
+        if len(self.sub_areas) == 0:
+            self.append_output(tr['Main']['FullScreenProcessingNote'])
+            self.sub_areas.append((0, self.frame_height, 0, self.frame_width))
         if self.is_picture:
             pic_dir = os.path.join(os.path.dirname(self.video_path), 'no_sub')
             if not os.path.exists(pic_dir):
@@ -153,7 +156,7 @@ class SubtitleRemover:
         pass
 
     def propainter_mode(self, tbar):
-        sub_detector = SubtitleDetect(self.video_path, self.sub_area)
+        sub_detector = SubtitleDetect(self.video_path, self.sub_areas)
         sub_list = sub_detector.find_subtitle_frame_no(sub_remover=self)
         if len(sub_list) == 0:
             raise Exception(tr['Main']['NoSubtitleDetected'].format(self.video_path))
@@ -242,18 +245,16 @@ class SubtitleRemover:
         使用sttn对选中区域进行重绘，不进行字幕检测
         """
         self.append_output(tr['Main']['ProcessingStartRemovingSubtitles'])
-        if self.sub_area is not None:
-            ymin, ymax, xmin, xmax = self.sub_area
-        else:
-            self.append_output(tr['Main']['FullScreenProcessingNote'])
-            ymin, ymax, xmin, xmax = 0, self.frame_height, 0, self.frame_width
-        mask_area_coordinates = [(xmin, xmax, ymin, ymax)]
+        mask_area_coordinates = []
+        for sub_area in self.sub_areas:
+            ymin, ymax, xmin, xmax = sub_area
+            mask_area_coordinates.append((xmin, xmax, ymin, ymax))
         mask = create_mask(self.mask_size, mask_area_coordinates)
         sttn_video_inpaint = STTNAutoInpaint(self.hardware_accelerator.device, self.model_config.STTN_AUTO_MODEL_PATH, self.video_path)
         sttn_video_inpaint(input_mask=mask, input_sub_remover=self, tbar=tbar)
 
     def video_inpaint(self, tbar, model):
-        sub_detector = SubtitleDetect(self.video_path, self.sub_area)
+        sub_detector = SubtitleDetect(self.video_path, self.sub_areas)
         sub_list = sub_detector.find_subtitle_frame_no(sub_remover=self)
         if len(sub_list) == 0:
             raise Exception(tr['Main']['NoSubtitleDetected'].format(self.video_path))
@@ -342,7 +343,7 @@ class SubtitleRemover:
             if original_frame is None:
                 self.append_output(tr['Main']['ReadImageFailed'].format(self.video_path))
                 return
-            sub_detector = SubtitleDetect(self.video_path, self.sub_area)
+            sub_detector = SubtitleDetect(self.video_path, self.sub_areas)
             sub_list = sub_detector.detect_subtitle(original_frame)
             del sub_detector
             gc.collect()
@@ -457,11 +458,9 @@ if __name__ == '__main__':
     multiprocessing.set_start_method("spawn")
     from backend.tools.args_handler import parse_args
     args = parse_args()
-    sub_area = None if args.ymin is None or args.ymax is None or args.xmin is None or args.xmax is None else (
-        args.ymin, args.ymax, args.xmin, args.xmax)
     
-    print('Subtitle Area:', 'fullscreen' if sub_area is None else sub_area)
-    sr = SubtitleRemover(args.input, sub_area=sub_area)
+    print('Subtitle Area:', 'fullscreen' if len(args.subtitle_area_coords) <= 0 else args.subtitle_area_coords)
+    sr = SubtitleRemover(args.input, sub_areas=args.subtitle_area_coords)
     if not is_video_or_image(args.input):
         sr.append_output(f'Error: {video_path} is not supported not corrupted.')
         exit(-1)
