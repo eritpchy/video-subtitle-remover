@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from backend.config import config
 from backend.inpaint.sttn.auto_sttn import InpaintGenerator
 from backend.inpaint.utils.sttn_utils import Stack, ToTorchFormatTensor
-from backend.tools.inpaint_tools import get_inpaint_area_by_mask
+from backend.tools.inpaint_tools import get_inpaint_area_by_mask, is_frame_number_in_ab_sections
 
 # 定义图像预处理方式
 _to_tensors = transforms.Compose([
@@ -205,8 +205,11 @@ class STTNAutoInpaint:
             # 读取视频帧信息
             reader, frame_info = self.read_frame_info_from_video()
             if input_sub_remover is not None:
+                ab_sections = input_sub_remover.ab_sections
+                
                 writer = input_sub_remover.video_writer
             else:
+                ab_sections = None
                 # 创建视频写入对象，用于输出修复后的视频
                 writer = cv2.VideoWriter(self.video_out_path, cv2.VideoWriter_fourcc(*"mp4v"), frame_info['fps'], (frame_info['W_ori'], frame_info['H_ori']))
             
@@ -249,11 +252,12 @@ class STTNAutoInpaint:
                     frames_hr.append(image)
                     valid_frames_count += 1
                     
-                    for k in range(len(inpaint_area)):
-                        # 裁剪、缩放并添加到帧字典
-                        image_crop = image[inpaint_area[k][0]:inpaint_area[k][1], :, :]
-                        image_resize = cv2.resize(image_crop, (self.sttn_inpaint.model_input_width, self.sttn_inpaint.model_input_height))
-                        frames[k].append(image_resize)
+                    if is_frame_number_in_ab_sections(j, ab_sections):
+                        for k in range(len(inpaint_area)):
+                            # 裁剪、缩放并添加到帧字典
+                            image_crop = image[inpaint_area[k][0]:inpaint_area[k][1], :, :]
+                            image_resize = cv2.resize(image_crop, (self.sttn_inpaint.model_input_width, self.sttn_inpaint.model_input_height))
+                            frames[k].append(image_resize)
                 
                 # 如果没有读取到有效帧，则跳过当前迭代
                 if valid_frames_count == 0:

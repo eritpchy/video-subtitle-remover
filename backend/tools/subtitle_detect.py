@@ -12,6 +12,7 @@ from .ocr import get_coordinates
 from backend.config import config, tr
 from backend.scenedetect import scene_detect
 from backend.scenedetect.detectors import ContentDetector
+from backend.tools.inpaint_tools import is_frame_number_in_ab_sections
 
 class SubtitleDetect:
     """
@@ -73,6 +74,9 @@ class SubtitleDetect:
                 break
             # 读取视频帧成功
             current_frame_no += 1
+            if not is_frame_number_in_ab_sections(current_frame_no - 1, sub_remover.ab_sections):
+                tbar.update(1)
+                continue
             temp_list = self.detect_subtitle(frame)
             if len(temp_list) > 0:
                 subtitle_frame_no_box_dict[current_frame_no] = temp_list

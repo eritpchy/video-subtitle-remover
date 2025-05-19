@@ -1,6 +1,7 @@
 import cv2
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
-from PySide6.QtCore import Qt, Signal, QRect, QRectF, QTimer, QObject, QEvent
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QMenu
+from PySide6.QtCore import Qt, Signal, QRect, QRectF, QObject, QEvent
+from PySide6.QtGui import QAction, QShortcut
 from PySide6 import QtCore, QtWidgets, QtGui
 from qfluentwidgets import qconfig, CardWidget, HollowHandleStyle
 
@@ -11,6 +12,7 @@ class VideoDisplayComponent(QWidget):
     
     # 定义信号
     selection_changed = Signal(list)  # 选择框变化信号
+    ab_sections_changed = Signal(list)  # AB分区变化信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,8 +29,12 @@ class VideoDisplayComponent(QWidget):
         self.edge_size = 10  # 调整大小的边缘区域
         self.enable_mouse_events = True  # 控制是否启用鼠标事件
         
-        # 安装事件过滤器以捕获键盘事件
-        self.installEventFilter(self)
+        # AB分区标记相关变量
+        self.ab_sections = []  # 存储AB分区标记 [range(start, end), ...]
+        self.current_ab_start = -1  # 当前AB分区的起点
+        
+        # 创建右键菜单
+        self.__init_context_menu()
         
         # 获取屏幕大小
         screen = QtWidgets.QApplication.primaryScreen().size()
@@ -49,10 +55,12 @@ class VideoDisplayComponent(QWidget):
         self.scaled_height = None
         self.border_left = 0
         self.border_top = 0
+        self.fps = 30
 
-        self.__initWidget()
+        self.__init_widgets()
+        self.__init_shotcuts()
         
-    def __initWidget(self):
+    def __init_widgets(self):
         """初始化组件"""
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(0)
@@ -156,6 +164,51 @@ class VideoDisplayComponent(QWidget):
         self.video_container.setLayout(video_layout)
         main_layout.addWidget(self.video_container)
     
+    def __init_shotcuts(self):
+        """初始化快捷键"""
+        self.shortcut_ab_start = QShortcut(QtGui.QKeySequence("["), self)
+        self.shortcut_ab_start.activated.connect(self.__handle_mark_for_ab_start)
+        self.shortcut_ab_start.setContext(Qt.ApplicationShortcut)
+
+        self.shortcut_ab_end = QShortcut(QtGui.QKeySequence("]"), self)
+        self.shortcut_ab_end.activated.connect(self.__handle_mark_for_ab_end)
+        self.shortcut_ab_end.setContext(Qt.ApplicationShortcut)
+
+        self.shortcut_ab_delete = QShortcut(QtGui.QKeySequence("\\"), self)
+        self.shortcut_ab_delete.activated.connect(self.__handle_delete_ab_section)
+        self.shortcut_ab_delete.setContext(Qt.ApplicationShortcut)
+
+        self.shortcut_delete_selection = QShortcut(QtGui.QKeySequence.Delete, self)
+        self.shortcut_delete_selection.activated.connect(self.__handle_delete_selection)
+        self.shortcut_delete_selection.setContext(Qt.ApplicationShortcut)
+
+        # 添加左右键控制slider的快捷键
+        self.shortcut_right = QShortcut(QtGui.QKeySequence(Qt.Key_Right), self)
+        self.shortcut_right.activated.connect(lambda: self.__adjust_slider_value(self.fps))
+        self.shortcut_right.setContext(Qt.ApplicationShortcut)
+        
+        self.shortcut_left = QShortcut(QtGui.QKeySequence(Qt.Key_Left), self)
+        self.shortcut_left.activated.connect(lambda: self.__adjust_slider_value(-self.fps))
+        self.shortcut_left.setContext(Qt.ApplicationShortcut)
+        
+        # 添加Ctrl+左右键控制slider的快捷键
+        self.shortcut_ctrl_right = QShortcut(QtGui.QKeySequence("Ctrl+Right"), self)
+        self.shortcut_ctrl_right.activated.connect(lambda: self.__adjust_slider_value(self.fps*5))
+        self.shortcut_ctrl_right.setContext(Qt.ApplicationShortcut)
+        
+        self.shortcut_ctrl_left = QShortcut(QtGui.QKeySequence("Ctrl+Left"), self)
+        self.shortcut_ctrl_left.activated.connect(lambda: self.__adjust_slider_value(-self.fps*5))
+        self.shortcut_ctrl_left.setContext(Qt.ApplicationShortcut)
+        
+        # 添加Shift+左右键控制slider的快捷键
+        self.shortcut_shift_right = QShortcut(QtGui.QKeySequence("Shift+Right"), self)
+        self.shortcut_shift_right.activated.connect(lambda: self.__adjust_slider_value(1))
+        self.shortcut_shift_right.setContext(Qt.ApplicationShortcut)
+        
+        self.shortcut_shift_left = QShortcut(QtGui.QKeySequence("Shift+Left"), self)
+        self.shortcut_shift_left.activated.connect(lambda: self.__adjust_slider_value(-1))
+        self.shortcut_shift_left.setContext(Qt.ApplicationShortcut)
+
     def update_video_display(self, frame, draw_selection=True):
         """更新视频显示"""
         if frame is None:
@@ -255,6 +308,50 @@ class VideoDisplayComponent(QWidget):
             painter.setPen(pen)
             painter.drawRect(self.selection_rect)
         
+        # 绘制AB分区标记
+        total_frames = self.video_slider.maximum()
+        if total_frames > 0 and self.ab_sections:
+            # 在视频显示区域下方5像素处绘制AB分区标记
+            ab_rect_height = 5
+            ab_rect_y = pixmap_copy.height() - ab_rect_height
+            
+            # 设置半透明白色画刷
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QtGui.QColor(255, 255, 255, 128))  # 半透明白色
+            
+            # 计算可用宽度（考虑左右边距）
+            left_margin = 15
+            right_margin = 15
+            available_width = pixmap_copy.width() - left_margin - right_margin
+            
+            for section_range in self.ab_sections:
+                # 计算相对位置
+                start_x = left_margin + int((section_range.start / total_frames) * available_width)
+                end_x = left_margin + int((section_range.stop / total_frames) * available_width)
+                
+                # 绘制AB分区矩形
+                painter.drawRect(start_x, ab_rect_y, end_x - start_x, ab_rect_height)
+        
+        # 绘制current_ab_start的高亮竖线
+        if self.current_ab_start >= 0 and total_frames > 0:
+            # 计算可用宽度（考虑左右边距）
+            left_margin = 15
+            right_margin = 15
+            available_width = pixmap_copy.width() - left_margin - right_margin
+            
+            # 计算current_ab_start的相对位置
+            start_x = left_margin + int((self.current_ab_start / total_frames) * available_width)
+            
+            # 设置高亮白色画笔
+            pen = QtGui.QPen(QtGui.QColor(255, 255, 255))  # 纯白色
+            pen.setWidth(2)
+            painter.setPen(pen)
+            
+            # 绘制高亮竖线，高度为5像素
+            ab_line_height = 5
+            ab_line_y = pixmap_copy.height() - ab_line_height
+            painter.drawLine(start_x, ab_line_y, start_x, pixmap_copy.height())
+        
         painter.end()
         
         # 更新显示
@@ -264,8 +361,12 @@ class VideoDisplayComponent(QWidget):
         """鼠标按下事件处理"""
         if not self.enable_mouse_events:
             return
-        # 设置焦点到当前组件
-        self.setFocus()
+
+        # 处理右键点击，显示上下文菜单
+        if event.button() == Qt.RightButton:
+            self.context_menu.exec_(event.globalPos())
+            return
+
         pos = event.pos()
         
         # 检查是否按下了Ctrl键
@@ -559,7 +660,10 @@ class VideoDisplayComponent(QWidget):
         # 如果鼠标不在任何选区上，设置为默认光标
         self.video_display.setCursor(Qt.ArrowCursor)
     
-    def set_video_parameters(self, frame_width, frame_height, scaled_width=None, scaled_height=None, border_left=0, border_top=0):
+    def set_video_parameters(self, frame_width, frame_height, 
+                             scaled_width=None, scaled_height=None, 
+                             border_left=0, border_top=0, 
+                             fps=30):
         """设置视频参数"""
         self.frame_width = frame_width
         self.frame_height = frame_height
@@ -567,6 +671,7 @@ class VideoDisplayComponent(QWidget):
         self.scaled_height = scaled_height
         self.border_left = border_left
         self.border_top = border_top
+        self.fps = fps
     
     def get_selection_coordinates(self):
         """获取选择框坐标"""
@@ -739,27 +844,175 @@ class VideoDisplayComponent(QWidget):
         self.update_preview_with_rect()
         self.selection_changed.emit(self.selection_rects)
 
-    def eventFilter(self, obj, event):
-        """事件过滤器，用于处理键盘事件"""
-        if event.type() == QEvent.KeyPress:
-            # 处理退格键或删除键
-            if (event.key() == Qt.Key_Backspace or event.key() == Qt.Key_Delete) and self.active_selection_index >= 0:
-               
-                # 删除当前活跃选区
-                self.selection_rects.pop(self.active_selection_index)
-                if self.selection_ratios:
-                    self.selection_ratios.pop(self.active_selection_index)
-                
-                # 如果还有选区，将最后一个选区设为活跃选区
-                if self.selection_rects:
-                    self.active_selection_index = len(self.selection_rects) - 1
-                else:
-                    self.active_selection_index = -1
-                self.save_selections_to_configs()
-                # 更新显示并发送选区变化信号
-                self.update_preview_with_rect()
-                self.selection_changed.emit(self.selection_rects)
-                return True
+    def __handle_delete_selection(self):
+        """处理删除当前选区的逻辑"""
+        if self.active_selection_index >= 0 and self.selection_rects:
+            # 删除当前活跃选区
+            self.selection_rects.pop(self.active_selection_index)
+            if self.selection_ratios:
+                self.selection_ratios.pop(self.active_selection_index)
+            
+            # 如果还有其他选区，将最后一个选区设为活跃选区
+            if self.selection_rects:
+                self.active_selection_index = len(self.selection_rects) - 1
+            else:
+                self.active_selection_index = -1
+
+            self.save_selections_to_configs()
+            
+            # 更新显示
+            self.update_preview_with_rect()
+            
+            # 发送选区变化信号
+            self.selection_changed.emit(self.selection_rects)
+            return True
+
+    def __handle_mark_for_ab_start(self):
+        """处理标记AB分区起点的逻辑"""
+        current_frame = self.video_slider.value()
+        if current_frame >= 0:
+            # 检查是否需要调整已有区间
+            adjusted = False
+            for i, section_range in enumerate(self.ab_sections):
+                if current_frame in section_range:
+                    # 调整已有区间的起点
+                    self.ab_sections[i] = range(current_frame, section_range.stop)
+                    adjusted = True
+                    break
+            
+            if not adjusted:
+                # 记录新的AB分区起点
+                self.current_ab_start = current_frame
+            
+            # 更新显示
+            self.update_preview_with_rect()
+            return True
+        return False
+
+    def __handle_mark_for_ab_end(self):
+        """处理标记AB分区终点的逻辑"""
+        current_frame = self.video_slider.value()
+        if current_frame >= 0 and self.current_ab_start >= 0:
+            # 检查是否需要调整已有区间
+            adjusted = False
+            for i, section_range in enumerate(self.ab_sections):
+                if current_frame in section_range:
+                    # 调整已有区间的终点
+                    self.ab_sections[i] = range(section_range.start, current_frame + 1)
+                    adjusted = True
+                    break
+            
+            if not adjusted and self.current_ab_start != current_frame:
+                # 添加新的AB分区
+                self.ab_sections.append(range(self.current_ab_start, current_frame + 1))
+                self.current_ab_start = -1  # 重置起点
+                self.ab_sections_changed.emit(self.ab_sections)
+            
+            # 更新显示
+            self.update_preview_with_rect()
+            return True
+        return False
+
+    def __handle_delete_ab_section(self):
+        """处理删除当前AB区块的逻辑"""
+        current_frame = self.video_slider.value()
+        if current_frame >= 0 and self.ab_sections:
+            # 查找当前帧所在的AB区块
+            for i, section_range in enumerate(self.ab_sections):
+                if current_frame in section_range:
+                    # 删除该AB区块
+                    self.ab_sections.pop(i)
+                    
+                    # 如果当前有标记的起点，且在被删除的区块内，重置起点
+                    if self.current_ab_start in section_range:
+                        self.current_ab_start = -1
+                    
+                    # 发送AB区块变化信号
+                    self.ab_sections_changed.emit(self.ab_sections)
+                    
+                    # 更新显示
+                    self.update_preview_with_rect()
+                    return True
+        return False
+    
+    def __adjust_slider_value(self, delta):
+        """调整视频滑块的值"""
+        current_value = self.video_slider.value()
+        max_value = self.video_slider.maximum()
+        new_value = current_value + int(delta)
         
+        # 确保新值在有效范围内
+        if new_value < self.video_slider.minimum():
+            new_value = self.video_slider.minimum()
+        elif new_value > max_value:
+            new_value = max_value
+            
+        # 设置新值
+        self.video_slider.setValue(new_value)
+
+    def eventFilter(self, obj, event):
+        """事件过滤器，处理键盘事件"""
+        if event.type() == QEvent.KeyPress:
+            # 处理退格键和删除键
+            if event.key() == Qt.Key_Backspace or event.key() == Qt.Key_Delete:
+                if self.__handle_delete_selection():
+                    return True
         # 对于其他事件，继续传递给父类处理
         return super().eventFilter(obj, event)
+
+    def __init_context_menu(self):
+        """初始化右键菜单"""
+        self.context_menu = QMenu(self)
+        
+        # 设定区块起点动作
+        self.action_mark_ab_start = QAction(tr['SubtitleExtractorGUI']['MarkABStart'], self)
+        self.action_mark_ab_start.setShortcut("[")
+        self.action_mark_ab_start.triggered.connect(self.__handle_mark_for_ab_start)
+        self.context_menu.addAction(self.action_mark_ab_start)
+        
+        # 设定区块终点动作
+        self.action_mark_ab_end = QAction(tr['SubtitleExtractorGUI']['MarkABEnd'], self)
+        self.action_mark_ab_end.setShortcut("]")
+        self.action_mark_ab_end.triggered.connect(self.__handle_mark_for_ab_end)
+        self.context_menu.addAction(self.action_mark_ab_end)
+
+        self.action_mark_ab_delete = QAction(tr['SubtitleExtractorGUI']['DeleteABSection'], self)
+        self.action_mark_ab_delete.setShortcut("\\")
+        self.action_mark_ab_delete.triggered.connect(self.__handle_delete_ab_section)
+        self.context_menu.addAction(self.action_mark_ab_delete)
+
+        self.action_delete_selection = QAction(tr['SubtitleExtractorGUI']['DeleteSelection'], self)
+        self.action_delete_selection.setShortcut("DELETE")
+        self.action_delete_selection.triggered.connect(self.__handle_delete_selection)
+        self.context_menu.addAction(self.action_delete_selection)
+
+    def get_ab_sections(self):
+        """获取AB分区标记"""
+        return self.ab_sections
+
+    def set_ab_sections(self, sections):
+        """设置AB分区标记"""
+        self.ab_sections = sections
+        self.update_preview_with_rect()
+
+    def clear_ab_sections(self):
+        """清除所有AB分区标记"""
+        self.ab_sections = []
+        self.current_ab_start = -1
+        self.update_preview_with_rect()
+
+    def closeEvent(self, event):
+        """窗口关闭时断开信号连接"""
+        try:
+            # 断开信号连接
+            self.shortcut_ab_start.activated.disconnect(self.__handle_mark_for_ab_start)
+            self.shortcut_ab_end.activated.disconnect(self.__handle_mark_for_ab_end)
+            self.shortcut_ab_delete.activated.disconnect(self.__handle_delete_ab_section)
+            self.action_mark_ab_start.triggered.disconnect(self.__handle_mark_for_ab_start)
+            self.action_mark_ab_end.triggered.disconnect(self.__handle_mark_for_ab_end)
+            self.action_mark_ab_delete.triggered.disconnect(self.__handle_delete_ab_section)
+            self.action_delete_selection.triggered.disconnect(self.__handle_delete_selection)
+            self.shortcut_delete_selection.activated.disconnect(self.__handle_delete_selection)
+        except Exception as e:
+            print(f"Error during close window:", e)
+        super().closeEvent(event)

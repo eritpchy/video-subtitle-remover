@@ -84,6 +84,8 @@ class SubtitleRemover:
         self.is_successful_merged = False
         # 进度监听器列表
         self.progress_listeners = []
+        # inpaint的frame_no区域列表, 默认为inpaint所有帧
+        self.ab_sections = None
 
     @staticmethod
     def is_current_frame_no_start(frame_no, continuous_frame_no_list):
@@ -180,6 +182,7 @@ class SubtitleRemover:
                 self.video_writer.write(frame)
                 # self.append_output(f'write frame: {index}')
                 self.update_progress(tbar, increment=1)
+                self.update_preview_with_comp(frame, frame)
                 continue
             # 如果有水印，判断该帧是不是开头帧
             else:

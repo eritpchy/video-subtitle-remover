@@ -208,5 +208,23 @@ def expand_frame_ranges(frame_ranges, backward_frame_count, forward_frame_count)
     
     return expanded_ranges
 
+def is_frame_number_in_ab_sections(frame_no, ab_sections):
+    """
+    检查给定的帧号是否在指定的A/B区间内。
+
+    Args:
+        frame_no: 要检查的帧号
+        ab_sections: 包含A/B区间的列表，格式为[range(start, end), ...]
+
+    Returns:
+        如果帧号在A/B区间内，返回True；否则返回False。
+    """
+    if ab_sections is None:
+        return True
+    for section in ab_sections:
+        if frame_no in section:
+            return True
+    return False
+
 if __name__ == '__main__':
     multiprocessing.set_start_method("spawn")

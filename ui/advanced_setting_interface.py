@@ -19,9 +19,9 @@ class AdvancedSettingInterface(ScrollArea):
         super().__init__(parent)
         self.parent = parent
         self.version_manager = VersionService()
-        self.__initWidget()
+        self.__init_widgets()
 
-    def __initWidget(self):
+    def __init_widgets(self):
         # 创建滚动内容的容器
         self.scrollWidget = QtWidgets.QWidget(self)
         self.expandLayout = ExpandLayout(self.scrollWidget)

@@ -1,5 +1,5 @@
 import os
-from enum import Enum
+from enum import Enum, unique
 from dataclasses import dataclass
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QMenu, QAbstractItemView, QTableWidgetItem, QHeaderView
 from PySide6.QtCore import Qt, Signal, QModelIndex, QUrl
@@ -9,11 +9,17 @@ from showinfm import show_in_file_manager
 
 from backend.config import tr
 
+@unique
 class TaskStatus(Enum):
     PENDING = tr['TaskList']['Pending']
     PROCESSING = tr['TaskList']['Processing']
     COMPLETED = tr['TaskList']['Completed']
     FAILED = tr['TaskList']['Failed']
+
+
+@unique
+class TaskOptions(Enum):
+    AB_SECTIONS = "ab_sections"
 
 @dataclass
 class Task:
@@ -22,6 +28,7 @@ class Task:
     progress: int
     status: TaskStatus
     output_path: str
+    options: dict
 
 class TaskListComponent(QWidget):
     """任务列表组件"""
@@ -39,9 +46,9 @@ class TaskListComponent(QWidget):
         self.current_task_index = -1  # 当前选中的任务索引
         
         # 创建布局
-        self.__initWidget()
+        self.__init_widgets()
         
-    def __initWidget(self):
+    def __init_widgets(self):
         """初始化组件"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -95,6 +102,7 @@ class TaskListComponent(QWidget):
             progress=0,
             status=TaskStatus.PENDING,
             output_path=output_path,
+            options={},
         )
         self.tasks.append(task)
         
@@ -296,6 +304,14 @@ class TaskListComponent(QWidget):
             self.current_task_index = index
             self.table.selectRow(index)
             self.table.scrollTo(self.table.model().index(index, 0))
+        
+    def get_current_task_index(self):
+        """获取当前处理的任务索引
+
+        Returns:
+            int: 任务索引
+        """
+        return self.current_task_index
             
     def select_task(self, index):
         """选中指定任务
@@ -329,3 +345,26 @@ class TaskListComponent(QWidget):
         while parent.parent():
             parent = parent.parent()
         return parent
+
+    def update_task_option(self, index, task_option: TaskOptions, value):
+        """更新任务选项
+
+        Args:
+            index: 任务索引
+            task_option: 选项名
+            value: 选项值
+        """
+        if 0 <= index < len(self.tasks):
+            self.tasks[index].options[task_option.value] = value
+
+    def get_task_option(self, index, task_option: TaskOptions, default=None):
+        """获取任务选项
+        Args:
+            index: 任务索引
+            task_option: 选项名
+            default: 默认值
+        Returns:
+            选项值
+        """
+        if 0 <= index < len(self.tasks):
+            return self.tasks[index].options.get(task_option.value, default)
