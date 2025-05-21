@@ -262,15 +262,15 @@ class HomeInterface(QWidget):
         )
         
         # 保存边框信息，用于坐标转换
-        self.border_left = left_border
-        self.border_right = right_border
-        self.border_top = top_border
-        self.border_bottom = bottom_border
+        self.border_left = left_border / video_preview_width
+        self.border_right = right_border / video_preview_width
+        self.border_top = top_border / video_preview_height
+        self.border_bottom = bottom_border / video_preview_height
         self.original_width = width
         self.original_height = height
         self.is_vertical = width < height
-        self.scaled_width = new_width
-        self.scaled_height = new_height
+        self.scaled_width = new_width / video_preview_width
+        self.scaled_height = new_height / video_preview_height
         
         return padded
 
