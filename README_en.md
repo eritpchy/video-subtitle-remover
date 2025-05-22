@@ -202,7 +202,7 @@ This project supports four running modes: CUDA (NVIDIA GPU acceleration), CPU (n
 ##### (4) Running on macOS (Apple Silicon)
 - Suitable for macOS (Apple Silicon) devices
 - For macOS (Intel), please use the CPU mode. Forcing GPU usage will only be slower.
-- On macOS (Apple Silicon), the accuracy of the subtitle detection precision mode model (ch_det_fast/model.onnx) does not seem to be ideal. It is recommended to use the fast mode instead.
+- The accuracy of the Server model for subtitle detection on macOS (Apple Silicon) seems suboptimal. It is recommended to use the Mobile model instead.
   ```shell
   pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
   pip install torch==2.7.0 torchvision==0.22.0

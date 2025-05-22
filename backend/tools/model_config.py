@@ -9,10 +9,14 @@ class ModelConfig:
         self.STTN_AUTO_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'sttn-auto', 'infer_model.pth')
         self.STTN_DET_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'sttn-det', 'sttn.pth')
         self.PROPAINTER_MODEL_DIR = os.path.join(BASE_DIR,'models', 'propainter')
-        if config.subtitleDetectMode.value == SubtitleDetectMode.Fast:
+        if config.subtitleDetectMode.value == SubtitleDetectMode.PP_OCRv5_MOBILE:
             self.DET_MODEL_DIR = os.path.join(BASE_DIR,'models', 'V5', 'ch_det_fast')
-        elif config.subtitleDetectMode.value == SubtitleDetectMode.Accurate:
+        elif config.subtitleDetectMode.value == SubtitleDetectMode.PP_OCRv5_SERVER:
             self.DET_MODEL_DIR = os.path.join(BASE_DIR, 'models', 'V5', 'ch_det')
+        elif config.subtitleDetectMode.value == SubtitleDetectMode.PP_OCRv4_MOBILE:
+            self.DET_MODEL_DIR = os.path.join(BASE_DIR,'models', 'V4', 'ch_det_fast')
+        elif config.subtitleDetectMode.value == SubtitleDetectMode.PP_OCRv4_SERVER:
+            self.DET_MODEL_DIR = os.path.join(BASE_DIR, 'models', 'V4', 'ch_det')
         else:
             raise ValueError(f"Invalid subtitle detect mode: {config.subtitleDetectMode.value}")
 

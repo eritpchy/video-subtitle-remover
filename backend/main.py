@@ -334,7 +334,6 @@ class SubtitleRemover:
         # 如果使用GPU加速，则打印GPU加速提示
         if self.hardware_accelerator.has_accelerator():
             accelerator_name = self.hardware_accelerator.accelerator_name
-            self.append_output(tr['Main']['SubtitleDetectionAcceleratorON'].format(accelerator_name))
             if accelerator_name == 'DirectML' and config.inpaintMode.value not in [InpaintMode.STTN_AUTO, InpaintMode.STTN_DET]:
                 self.append_output(tr['Main']['DirectMLWarning'])
         os.makedirs(os.path.dirname(self.video_out_path), exist_ok=True)
@@ -401,7 +400,8 @@ class SubtitleRemover:
                 model_device = 'DirectML'
             if self.hardware_accelerator.has_cuda() or self.hardware_accelerator.has_mps():
                 model_device = accelerator_name
-        self.append_output(tr['Main']['UseModel'].format(f"{model_friendly_name} ({model_device})"))
+        self.append_output(tr['Main']['SubtitleRemoverModel'].format(f"{model_friendly_name} ({model_device})"))
+        self.append_output(tr['Main']['SubtitleDetectionModel'].format(f"{config.subtitleDetectMode.value.value} ({", ".join(self.hardware_accelerator.onnx_providers)})"))
 
     def merge_audio_to_video(self):
         # 创建音频临时对象，windows下delete=True会有permission denied的报错

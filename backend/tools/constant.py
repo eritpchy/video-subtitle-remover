@@ -16,5 +16,7 @@ class SubtitleDetectMode(Enum):
     """
     字幕检测算法枚举
     """
-    Fast = 0
-    Accurate = 1
+    PP_OCRv4_SERVER = "PP-OCRv4-Server" 
+    PP_OCRv4_MOBILE = "PP-OCRv4-Mobile"
+    PP_OCRv5_SERVER = "PP-OCRv5-Server" 
+    PP_OCRv5_MOBILE = "PP-OCRv5-Mobile" 

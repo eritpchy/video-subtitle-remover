@@ -201,7 +201,7 @@ cd <源码所在目录>
 ##### (4) macOS 运行 (Apple Silicon)
 - 适用于 macOS (Apple Silicon) 设备
 - macOS (Intel) 请使用CPU, 强行使用GPU只会更慢
-- macOS (Apple Silicon)上字幕检测精准模式的模型(ch_det_fast/model.onnx)精度似乎不太理想, 推荐使用快速模式
+- macOS (Apple Silicon)上字幕检测Server模型精度似乎不太理想, 推荐使用Mobile模型
   ```shell
   pip install paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
   pip install torch==2.7.0 torchvision==0.22.0
