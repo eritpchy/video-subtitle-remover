@@ -44,19 +44,19 @@ Windows GPU版本v1.1.0（GPU）：
 **Docker版本：**
 ```shell
   # Nvidia 10 20 30系显卡
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cuda11.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cuda11.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # Nvidia 40系显卡
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cuda12.6 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cuda12.6 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # Nvidia 50系显卡
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cuda12.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cuda12.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # AMD / Intel 独显 集显
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-directml python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-directml python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # CPU
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cpu python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cpu python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # 导出视频
   docker cp vsr:/vsr/test/test_no_sub.mp4 ./

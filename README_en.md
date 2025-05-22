@@ -43,19 +43,19 @@ Windows GPU Version v1.1.0 (GPU):
 **Docker Versions:**
 ```shell
   # Nvidia 10, 20, 30 Series Graphics Cards
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cuda11.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cuda11.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # Nvidia 40 Series Graphics Cards
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cuda12.6 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4 
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cuda12.6 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4 
 
   # Nvidia 50 Series Graphics Cards
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cuda12.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cuda12.8 python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # AMD / Intel Dedicated or Integrated Graphics
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-directml python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-directml python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # CPU
-  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.3.0-cpu python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
+  docker run -it --name vsr --gpus all eritpchy/video-subtitle-remover:1.4.0-cpu python backend/main.py -i test/test.mp4 -o test/test_no_sub.mp4
 
   # Copy to host
   docker cp vsr:/vsr/test/test_no_sub.mp4 ./
