@@ -13,7 +13,7 @@ from ui.setting_interface import SettingInterface
 from ui.component.video_display_component import VideoDisplayComponent
 from ui.component.task_list_component import TaskListComponent, TaskStatus, TaskOptions
 from ui.icon.my_fluent_icon import MyFluentIcon
-from backend.config import tr
+from backend.config import config, tr
 from backend.tools.subtitle_remover_remote_call import SubtitleRemoverRemoteCall
 from backend.tools.process_manager import ProcessManager
 from backend.tools.common_tools import get_readable_path, is_image_file, read_image
@@ -584,10 +584,11 @@ class HomeInterface(QWidget):
             # 正序添加, 确保任务列表顺序一致
             for path in reversed(files_loaded):
                 # 添加到任务列表
+                save_directory = os.path.dirname(path) if not config.saveDirectory.value else config.saveDirectory.value
                 if is_image_file(path):
-                    output_path = os.path.abspath(os.path.join(os.path.dirname(path), f'{Path(path).stem}_no_sub.png'))
+                    output_path = os.path.abspath(os.path.join(save_directory, f'{Path(path).stem}_no_sub.png'))
                 else:
-                    output_path = os.path.abspath(os.path.join(os.path.dirname(path), f'{Path(path).stem}_no_sub.mp4'))
+                    output_path = os.path.abspath(os.path.join(save_directory, f'{Path(path).stem}_no_sub.mp4'))
                 self.task_list_component.add_task(path, output_path)
                 index = max(0, self.task_list_component.find_task_index_by_path(path))
                 self.task_list_component.select_task(index)

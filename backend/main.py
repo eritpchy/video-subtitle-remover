@@ -337,6 +337,7 @@ class SubtitleRemover:
             self.append_output(tr['Main']['SubtitleDetectionAcceleratorON'].format(accelerator_name))
             if accelerator_name == 'DirectML' and config.inpaintMode.value not in [InpaintMode.STTN_AUTO, InpaintMode.STTN_DET]:
                 self.append_output(tr['Main']['DirectMLWarning'])
+        os.makedirs(os.path.dirname(self.video_out_path), exist_ok=True)
         # 重置进度条
         self.progress_total = 0
         tbar = tqdm(total=int(self.frame_count), unit='frame', position=0, file=sys.__stdout__,

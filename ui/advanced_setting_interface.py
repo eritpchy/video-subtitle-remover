@@ -3,10 +3,11 @@
 """
 
 from PySide6 import QtWidgets, QtCore, QtGui
+from PySide6.QtWidgets import QFileDialog
 from qfluentwidgets import (ScrollArea, ExpandLayout, CardWidget, SubtitleLabel,
                            FluentIcon, NavigationWidget, NavigationItemPosition,
                            SettingCardGroup, RangeSettingCard, SwitchSettingCard,
-                           HyperlinkCard, PrimaryPushSettingCard, ComboBoxSettingCard,
+                           HyperlinkCard, PrimaryPushSettingCard, PushSettingCard,
                            MessageBox)
 from backend.config import config, tr, VERSION, PROJECT_HOME_URL, PROJECT_ISSUES_URL, PROJECT_RELEASES_URL
 from backend.tools.version_service import VersionService
@@ -58,6 +59,7 @@ class AdvancedSettingInterface(ScrollArea):
         self.propainter_group.addSettingCard(self.propainter_max_load_num)
         self.expandLayout.addWidget(self.propainter_group)
 
+        self.advanced_group.addSettingCard(self.save_directory)
         self.advanced_group.addSettingCard(self.check_update_on_startup)
         self.expandLayout.addWidget(self.advanced_group)
 
@@ -170,6 +172,16 @@ class AdvancedSettingInterface(ScrollArea):
             parent=self.propainter_group
         )
 
+        # 视频保存路径
+        self.save_directory = PushSettingCard(
+            text=tr["Setting"]["ChooseDirectory"],
+            icon=FluentIcon.DOWNLOAD,
+            title=tr["Setting"]["SaveDirectory"],
+            content=tr["Setting"]["SaveDirectoryDefault"] if not config.saveDirectory.value else config.saveDirectory.value,
+            parent=self.advanced_group
+        )
+        self.save_directory.clicked.connect(self.choose_save_directory)
+
         self.check_update_on_startup = SwitchSettingCard(
             configItem=config.checkUpdateOnStartup,
             icon=FluentIcon.UPDATE,
@@ -245,3 +257,14 @@ class AdvancedSettingInterface(ScrollArea):
                 tr["Setting"]["NoUpdatesAvailableTitle"],
                 tr["Setting"]["NoUpdatesAvailableDesc"],
             )
+    
+    def choose_save_directory(self):
+        """选择保存目录"""
+        last_save_directory = "./" if not config.saveDirectory.value else config.saveDirectory.value
+        folder = QFileDialog.getExistingDirectory(
+            self, tr['Setting']['ChooseDirectory'], last_save_directory)
+        if not folder:
+            folder = ""
+
+        config.set(config.saveDirectory, folder)
+        self.save_directory.setContent(tr["Setting"]["SaveDirectoryDefault"] if not config.saveDirectory.value else config.saveDirectory.value)

@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from qfluentwidgets import (qconfig, ConfigItem, QConfig, OptionsValidator, BoolValidator, OptionsConfigItem, 
-                            EnumSerializer, RangeValidator, RangeConfigItem)
+                            EnumSerializer, RangeValidator, RangeConfigItem, ConfigValidator)
 from backend.tools.constant import InpaintMode, SubtitleDetectMode
 import configparser
 
@@ -104,6 +104,9 @@ class Config(QConfig):
     
     # 启动时检查应用更新
     checkUpdateOnStartup = ConfigItem("Main", "CheckUpdateOnStartup", True, BoolValidator())
+
+    # 视频保存目录
+    saveDirectory = ConfigItem("Main", "SaveDirectory", "", ConfigValidator())
 
 CONFIG_FILE = 'config/config.json'
 config = Config()
