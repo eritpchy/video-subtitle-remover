@@ -60,6 +60,7 @@ class SettingInterface(QtWidgets.QVBoxLayout):
         if not HARDWARD_ACCELERATION_OPTION:
             self.hardware_acceleration.switchButton.setChecked(False)
             self.hardware_acceleration.switchButton.setEnabled(False)
+            self.hardware_acceleration.setContent(tr["Setting"]["HardwareAccelerationNO"])
             config.set(config.hardwareAcceleration, False)
         # 添加一些空间
         self.addStretch(1)
