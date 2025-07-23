@@ -26,11 +26,16 @@ _to_tensors = transforms.Compose([
 class STTNInpaint:
     def __init__(self, device, model_path):
         self.device = device
+        # 是否在GPU上使用半精度加速
+        self.use_fp16 = self.device.type == "cuda"
         # 1. 创建InpaintGenerator模型实例并装载到选择的设备上
         self.model = InpaintGenerator().to(self.device)
         # 2. 载入预训练模型的权重，转载模型的状态字典
-        self.model.load_state_dict(torch.load(model_path, map_location='cpu')['netG'])
-        # 3. # 将模型设置为评估模式
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device)['netG'])
+        if self.use_fp16:
+            self.model.half()
+            torch.backends.cudnn.benchmark = True
+        # 3. 将模型设置为评估模式
         self.model.eval()
         # 模型输入用的宽和高
         self.model_input_width, self.model_input_height = 640, 120
@@ -124,16 +129,19 @@ class STTNInpaint:
         feats = _to_tensors(frames).unsqueeze(0) * 2 - 1
         # 把特征张量转移到指定的设备（CPU或GPU）
         feats = feats.to(self.device)
+        if self.use_fp16:
+            feats = feats.half()
         # 初始化一个与视频长度相同的列表，用于存储处理完成的帧
         comp_frames = [None] * frame_length
         # 关闭梯度计算，用于推理阶段节省内存并加速
         with torch.no_grad():
-            # 将处理好的帧通过编码器，产生特征表示
-            feats = self.model.encoder(feats.view(frame_length, 3, self.model_input_height, self.model_input_width))
-            # 获取特征维度信息
-            _, c, feat_h, feat_w = feats.size()
-            # 调整特征形状以匹配模型的期望输入
-            feats = feats.view(1, frame_length, c, feat_h, feat_w)
+            with torch.cuda.amp.autocast(enabled=self.use_fp16):
+                # 将处理好的帧通过编码器，产生特征表示
+                feats = self.model.encoder(feats.view(frame_length, 3, self.model_input_height, self.model_input_width))
+                # 获取特征维度信息
+                _, c, feat_h, feat_w = feats.size()
+                # 调整特征形状以匹配模型的期望输入
+                feats = feats.view(1, frame_length, c, feat_h, feat_w)
         # 获取重绘区域
         # 在设定的邻居帧步幅内循环处理视频
         for f in range(0, frame_length, self.neighbor_stride):
@@ -143,14 +151,15 @@ class STTNInpaint:
             ref_ids = self.get_ref_index(neighbor_ids, frame_length)
             # 同样关闭梯度计算
             with torch.no_grad():
-                # 通过模型推断特征并传递给解码器以生成完成的帧
-                pred_feat = self.model.infer(feats[0, neighbor_ids + ref_ids, :, :, :])
-                # 将预测的特征通过解码器生成图片，并应用激活函数tanh，然后分离出张量
-                pred_img = torch.tanh(self.model.decoder(pred_feat[:len(neighbor_ids), :, :, :])).detach()
-                # 将结果张量重新缩放到0到255的范围内（图像像素值）
-                pred_img = (pred_img + 1) / 2
-                # 将张量移动回CPU并转为NumPy数组
-                pred_img = pred_img.cpu().permute(0, 2, 3, 1).numpy() * 255
+                with torch.cuda.amp.autocast(enabled=self.use_fp16):
+                    # 通过模型推断特征并传递给解码器以生成完成的帧
+                    pred_feat = self.model.infer(feats[0, neighbor_ids + ref_ids, :, :, :])
+                    # 将预测的特征通过解码器生成图片，并应用激活函数tanh，然后分离出张量
+                    pred_img = torch.tanh(self.model.decoder(pred_feat[:len(neighbor_ids), :, :, :])).detach()
+                    # 将结果张量重新缩放到0到255的范围内（图像像素值）
+                    pred_img = (pred_img + 1) / 2
+                    # 将张量移动回CPU并转为NumPy数组
+                    pred_img = pred_img.cpu().permute(0, 2, 3, 1).numpy() * 255
                 # 遍历邻近帧
                 for i in range(len(neighbor_ids)):
                     idx = neighbor_ids[i]
@@ -231,7 +240,9 @@ class STTNAutoInpaint:
             for i in range(rec_time):
                 start_f = i * self.clip_gap  # 起始帧位置
                 end_f = min((i + 1) * self.clip_gap, frame_info['len'])  # 结束帧位置
-                tqdm.write(f'Processing: {start_f + 1} - {end_f} / Total: {frame_info['len']}')
+                tqdm.write(
+                    f"Processing: {start_f + 1} - {end_f} / Total: {frame_info['len']}"
+                )
                 
                 frames_hr = []  # 高分辨率帧列表
                 frames = {}  # 帧字典，用于存储裁剪后的图像

@@ -401,7 +401,9 @@ class SubtitleRemover:
             if self.hardware_accelerator.has_cuda() or self.hardware_accelerator.has_mps():
                 model_device = accelerator_name
         self.append_output(tr['Main']['SubtitleRemoverModel'].format(f"{model_friendly_name} ({model_device})"))
-        self.append_output(tr['Main']['SubtitleDetectionModel'].format(f"{config.subtitleDetectMode.value.value} ({", ".join(self.hardware_accelerator.onnx_providers)})"))
+        self.append_output(tr['Main']['SubtitleDetectionModel'].format(
+            f"{config.subtitleDetectMode.value.value} ({', '.join(self.hardware_accelerator.onnx_providers)})"
+        ))
 
     def merge_audio_to_video(self):
         # 创建音频临时对象，windows下delete=True会有permission denied的报错
