@@ -24,10 +24,12 @@ _to_tensors = transforms.Compose([
 ])
 
 class STTNInpaint:
-    def __init__(self, device, model_path):
+    def __init__(self, device, model_path, split_h=None):
         self.device = device
         # 是否在GPU上使用半精度加速
         self.use_fp16 = self.device.type == "cuda"
+        # 用户自定义的修复高度
+        self.custom_split_h = split_h
         # 1. 创建InpaintGenerator模型实例并装载到选择的设备上
         self.model = InpaintGenerator().to(self.device)
         # 2. 载入预训练模型的权重，转载模型的状态字典
@@ -54,7 +56,10 @@ class STTNInpaint:
         H_ori = int(H_ori + 0.5)
         W_ori = int(W_ori + 0.5)
         # 确定去字幕的垂直高度部分
-        split_h = int(W_ori * 3 / 16)
+        if self.custom_split_h is not None:
+            split_h = self.custom_split_h
+        else:
+            split_h = int(W_ori * 3 / 16)
         inpaint_area = get_inpaint_area_by_mask(W_ori, H_ori, split_h, mask)
         # 初始化帧存储变量
         # 高分辨率帧存储列表
@@ -190,9 +195,10 @@ class STTNAutoInpaint:
         # 返回视频读取对象、帧信息和视频写入对象
         return reader, frame_info
 
-    def __init__(self, device, model_path, video_path, mask_path=None, clip_gap=None):
+    def __init__(self, device, model_path, video_path, mask_path=None, clip_gap=None, split_h=None):
         # STTNInpaint视频修复实例初始化
-        self.sttn_inpaint = STTNInpaint(device, model_path)
+        self.sttn_inpaint = STTNInpaint(device, model_path, split_h=split_h)
+        self.custom_split_h = split_h
         # 视频和掩码路径
         self.video_path = video_path
         self.mask_path = mask_path
@@ -225,7 +231,10 @@ class STTNAutoInpaint:
             # 计算需要迭代修复视频的次数
             rec_time = frame_info['len'] // self.clip_gap if frame_info['len'] % self.clip_gap == 0 else frame_info['len'] // self.clip_gap + 1
             # 计算分割高度，用于确定修复区域的大小
-            split_h = int(frame_info['W_ori'] * 3 / 16)
+            if self.custom_split_h is not None:
+                split_h = self.custom_split_h
+            else:
+                split_h = int(frame_info['W_ori'] * 3 / 16)
             
             if input_mask is None:
                 # 读取掩码

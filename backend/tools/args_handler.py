@@ -24,6 +24,10 @@ def parse_args():
         choices=[mode.name.lower().replace('_','-') for mode in InpaintMode],
         help="Inpaint mode, default is sttn-auto"
     )
+    parser.add_argument(
+        "--inpaint-height", type=int, default=None,
+        help="Custom inpaint area height (pixels)"
+    )
     args = parser.parse_args()
     args.inpaint_mode = InpaintMode[args.inpaint_mode.replace('-','_').upper()]
     if args.subtitle_area_coords is None:

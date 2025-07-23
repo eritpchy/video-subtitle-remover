@@ -76,6 +76,8 @@ options:
                         Subtitle area coordinates (ymin ymax xmin xmax). Can be specified multiple times for multiple areas.
   --inpaint-mode {sttn-auto,sttn-det,lama,propainter,opencv}
                         Inpaint mode, default is sttn-auto
+  --inpaint-height INPAINT_HEIGHT
+                        自定义修复区域的高度，单位像素
 ```
 ## 演示
 

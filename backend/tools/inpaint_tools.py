@@ -44,6 +44,9 @@ def create_mask(size, coords_list):
             y2 = ymax + config.subtitleAreaDeviationPixel.value
             cv2.rectangle(mask, (x1, y1),
                           (x2, y2), (255, 255, 255), thickness=-1)
+        # 对掩码进行形态学闭运算，进一步去除空洞和噪点
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     return mask
 
 def get_inpaint_area_by_mask(W, H, h, mask, multiple=1):

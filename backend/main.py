@@ -36,6 +36,8 @@ class SubtitleRemover:
         self.lock = threading.RLock()
         # 用户指定的字幕区域位置
         self.sub_areas = []
+        # 自定义的STTN修复高度
+        self.custom_inpaint_height = None
         # 是否为gui运行，gui运行需要显示预览
         self.gui_mode = gui_mode
         self.hardware_accelerator = HardwareAccelerator.instance()
@@ -248,7 +250,15 @@ class SubtitleRemover:
             ymin, ymax, xmin, xmax = sub_area
             mask_area_coordinates.append((xmin, xmax, ymin, ymax))
         mask = create_mask(self.mask_size, mask_area_coordinates)
-        sttn_video_inpaint = STTNAutoInpaint(self.hardware_accelerator.device, self.model_config.STTN_AUTO_MODEL_PATH, self.video_path)
+        height = self.custom_inpaint_height
+        if height is None and self.sub_areas:
+            height = max(ymax - ymin for ymin, ymax, _, _ in self.sub_areas)
+        sttn_video_inpaint = STTNAutoInpaint(
+            self.hardware_accelerator.device,
+            self.model_config.STTN_AUTO_MODEL_PATH,
+            self.video_path,
+            split_h=height,
+        )
         sttn_video_inpaint(input_mask=mask, input_sub_remover=self, tbar=tbar)
 
     def video_inpaint(self, tbar, model):
@@ -473,6 +483,7 @@ if __name__ == '__main__':
         sr.append_output(f'Error: {video_path} is not supported not corrupted.')
         exit(-1)
     sr.sub_areas = args.subtitle_area_coords
+    sr.custom_inpaint_height = args.inpaint_height
     sr.video_out_path = args.output
     config.inpaintMode.value = args.inpaint_mode
     sr.run()
